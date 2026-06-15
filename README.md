@@ -19,7 +19,8 @@ and this is why you have to let the game perform the initial downloads.
 4. If you want to see more information of each mod you are subscribed enter Y for yes to enable Verbose mode.
 5. You will be asked for a mod.io Token if you have alread entered one just pre ENTER to continue using it.  If not...
 
-Use this method to authorize tools or dedicated servers.
+Use this method to get your Mod.io Token
+
 1. Go to Mod.io and Log In to your account.
 2. Click on the Button bottom right with a Letter in it to open your Navigation Menu.
 3. Select API Access from the navigation menu.
@@ -96,5 +97,5 @@ Change Log
 To Do
 =====
 
-    1. Create GUI to allow selecting of multiple mods that should be deleted
+    1. Create GUI to allow selecting of multiple mods that should be updated
 
