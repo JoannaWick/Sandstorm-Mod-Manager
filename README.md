@@ -1,11 +1,7 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.0.2
-### Date: 2026-06-20
-
-<mark>Recommend reading Sandstorm_Mod_Manager_Guide.pdf the first time you run the script.  It will give
-detailed information with image examples of the process.  When you run the script for the first time 
-you will be asked if you want to view the PDF.  Click on Y(es) is highly recommended.</mark>
+### Version: 1.1.0
+### Date: 2026-07-02
 
 ## YOU should Double-Click on Start_Sandstorm_Mod_Manager.bat to execute the program.
 
@@ -40,33 +36,13 @@ The first time you run the script it will re-download all of the mods you are su
 build a new state.json and store it's own update data for use next time you run the script.  I am doing this
 because sometimes the mod files that are actually stored do not match what the game thinks is stored.
 
-After the first time running the script it will only download and update any files that have changed on mod.io
-since the last time the script was run.
-
 If you Unsubscribe to any mod on Mod.io just run this script and it will delete the directories containing
 those mods so you will not need to do it manually.
 
 ## Usage
 
 1. Download the zip file and extract it anywhere.
-2. Right-click the `Download_Sandstorm_Mods.ps1` file and select "Run with PowerShell".
-4. You will be asked for a mod.io Token and read the How_To_Use_Sandstorm_Mod_Manager.pdf for how to get one (REQUIRED).
-
-Use this method to get your Mod.io Token
-
-1. Go to Mod.io and Log In to your account.
-2. Click on the Button bottom right with a Letter in it to open your Navigation Menu.
-3. Select API Access from the navigation menu.
-4. Scroll to the OAuth Access section.
-5. Where it says "Token Name*" enter Sandstorm and click on the + button.
-6. You will see TOKEN CREATED! Click on the two pieces of paper (Copy to Clipboard) button on the left side of the
-   string of number and letters.  This will copy the token.
-7. When asked for the the Token 'OAuth token (Press ENTER to use CURRENT) []' paste what you have copied end press enter.
-
-Your token will be saved for future use.  If you ever delete the token.cfg file you will need to repeate the above process.
-You cannot retrieve the token at a later date.  You will need to delete the old token from your API Access page on
-mod.io and then recreate it again for a new token. Tokens have a 1 Year expiration date. When they expire you will
-need to delete the old one and create a new one.
+2. Double-Click on Start_Sandstorm_Mod_Manager.bat
 
 Re-running the script at a later date, will check your subscriptions for updates and only download mods from new 
 subscriptions or mods which have been updated.
@@ -103,6 +79,21 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+1.1.0 (2026-07-02)
+
+    1. Listing total Subscription Count right after Page Count was not showing total Subscriptions
+       but only the Subscription Count to the current page being processed.
+    2. Removed the need to create a Personal Access Token.  The script uses the Games OAuth Token
+       stored in the user.json
+    3. Added backup and restore of globalsettings.json 
+       Sometimes the game will reset the globalsettings.json to point back to C:\Users\Public\mod.io
+       The script will make a globalsetting.backup file if one is not present.  After that the script
+       will compare the contents of the globalsettings.json with globalsettings.backup.  If they
+       do not match the contents of the backup will be restored to the json file.  When you move
+       the location of the mod.io directory the backup file will also be updated with the 
+       new location.
+       
 
 1.0.2 (2026-06-23)
 
@@ -150,5 +141,8 @@ Change Log
 To Do
 =====
 
-    Nothing at this time
+    1. Add displaying of all Sandstorm Collections on Mod.io
+    2. Add displaying contents of a selected Sandstorm Collection
+    3. Add Follwing and Unfollowing Collections
+
 

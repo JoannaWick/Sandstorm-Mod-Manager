@@ -1,12 +1,8 @@
 <#PSScriptInfo
-.VERSION 1.0.1
+.VERSION 1.1.0
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
-.RELEASENOTES
-1.0 - Initial release.
-.TODOLIST
-1. Nothing
 #>
 
 Set-Location -Path $PSScriptRoot
@@ -23,6 +19,35 @@ else
     exit
 }
 
+# Create Backup of globalsettings.json
+
+$backupsettingsPath = Join-Path $env:LOCALAPPDATA "mod.io\globalsettings.backup"
+
+if(-not(Test-Path "$backupsettingsPath"))
+{
+    Copy-Item -Path "$env:LOCALAPPDATA\mod.io\globalsettings.json" -Destination "$env:LOCALAPPDATA\mod.io\globalsettings.backup"
+}
+
+# Restore backup if json contents different
+
+$targetFile = "$env:LOCALAPPDATA\mod.io\globalsettings.json"
+$backupFile = "$env:LOCALAPPDATA\mod.io\globalsettings.backup"
+
+# Load JSON content
+$Settings_Json = Get-Content -Raw -Path $targetFile | ConvertFrom-Json
+$Backup_Json = Get-Content -Raw -Path $backupFile | ConvertFrom-Json
+
+# Compare paths (case-insensitive for directory paths)
+if ($Settings_Json.RootLocalStoragePath -ne $Backup_Json.RootLocalStoragePath) {
+    Write-Host "Mismatch found! Restoring backup..." -ForegroundColor Yellow
+    
+    # Overwrite the active file with the backup
+    Copy-Item -Path $backupFile -Destination $targetFile -Force
+    
+    Write-Host "Restore complete." -ForegroundColor Green
+    pause
+}
+
 $destination=$StoragePath.RootLocalStoragePath
 $destination=$destination.Replace('/', '\')
 $destination_Store=$destination
@@ -33,10 +58,29 @@ $totalMBdownloaded = 0
 $totalMBdiskStorage = 0
 $totalTimeDownloading = 0
 
-if (Test-Path token.cfg)
-{
-    $token=Get-Content token.cfg
+# Get Sandstorm OAuth Token and UserID
+
+$userName = ($env:LOCALAPPDATA -split '\\')[-3]
+$mod_io_254_user="$env:LOCALAPPDATA\mod.io\254\$userName\user.json" 
+$mod_io_254_server="$env:LOCALAPPDATA\mod.io\254\ModServer\user.json" 
+
+if (Test-Path $mod_io_254_user) {
+    $getstatejson = Get-Content -Raw -Path $mod_io_254_user | ConvertFrom-Json
 }
+elseif (Test-Path $mod_io_254_server) {
+    $getstatejson = Get-Content -Raw -Path $mod_io_254_server | ConvertFrom-Json
+}
+else {
+    Write-Host "MISSING $mod_io_254_user" -ForegroundColor Red
+    Write-Host "MISSING $mod_io_254_server" -ForegroundColor Red
+    Write-Host "Cannot proceed." -ForegroundColor Red
+    pause
+    exit
+}
+
+[string]$token=$getstatejson.Oauth.token
+$UserID=$getstatejson.Profile.id
+
 
 $enable_testing=0 # 0 - Disabled, 1 - Test Json output 
 
@@ -409,84 +453,8 @@ function Mod-Test
     return $destination
 }
 
-
-function Change-OAuth-Token
-{
-    echo ""
-
-    if(-not(User-Confirm "Would you like to open a Web Browser to mod.io to create your OAuth token?"))
-    {
-        echo ""
-        Write-Host "Make sure you have your access token ready as the script will not work without one." -ForegroundColor Yellow
-    }
-    else
-    {
-        Start-Process "https://mod.io/me/access"
-        pause
-    }
-
-    Write-Host ""    
-    Write-Host "If you have already created and saved a token it will be shown between the Brackets [] below" -ForegroundColor Green
-    Write-Host ""
-
-    do
-    {
-        $tok=Read-Host "OAuth token (Press ENTER to use CURRENT) [$token]"
-        echo ""
-
-        # If the user pressed ENTER, use the token.cfg value instead of an empty string
-        if ([string]::IsNullOrWhiteSpace($tok)) {
-            $tok = $token
-        }
-
-        if($tok.length -lt 1000)
-	    {
-		    echo "This doesn't seem to be a valid OAuth token. Make sure to copy an OAuth token, NOT an API access key"
-		    echo "(a proper OAuth token should be much longer than the value you entered)"
-            echo ""
-	    }
-    }
-
-    while($tok.length -lt 1000)
-
-    # (write token so that the user doesn't have to get another token if they have to delete the ModList.json)
-    $token=$tok
-    $token | Set-Content token.cfg
-
-    $url = "https://api.mod.io/v1/me/"
-    $headers = @{
-        "Authorization" = "Bearer $token"
-        "Accept"        = "application/json"
-    }
-
-    try {
-        $response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers -ErrorAction Stop
-    
-        Write-Host "Success: The token is valid!" -ForegroundColor Green
-        Write-Host "Authenticated as: $($response.username)"
-        Write-Host "User ID: $($response.id)"
-    }
-    catch [System.Net.WebException] {
-        if ($_.Exception.Response.StatusCode -eq 401) {
-            Write-Host "Failure: The token is invalid, expired, or has been revoked." -ForegroundColor Red
-        } else {
-            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-        Change-OAuth-Token
-    }
-    catch {
-        Write-Host "An unexpected error occurred: $($_.Exception.Message)" -ForegroundColor Red
-        Change-OAuth-Token
-    }
-}
-
 if (-not(Test-Path ModList.json))
 {
-    echo "This is your first time running Sandstorm_Mod_Manager and you need to create"
-    echo "an OAuth access token on mod.io so this script has access to all of your"
-    echo "subscribed Insurgency Sandstorm mods.  For detailed information on how to do"
-    echo "this please read the Sandstorm_Mod_Manager_Guide.pdf file."
-    echo ""
     echo "As this is your first time running this script all of your subscribed mods"
     echo "will be re-downloaded and updated to make sure they are all up to date."
     echo "After this process only newly updated or subscribed mods will be downloaded"
@@ -503,13 +471,6 @@ if (-not(Test-Path ModList.json))
     # Write initial ModList.json file
     # (so that the user doesn't have to go trough the setup again if the script doesn't run completely)
     $ModListData | ConvertTo-Json | Set-Content ModList.json
-
-    Change-OAuth-Token
-}
-
-if (Test-Path token.cfg)
-{
-    $token=Get-Content token.cfg
 }
 
 function Process-Subscriptions
@@ -606,22 +567,23 @@ function Process-Subscriptions
     echo "Found $Page_Count Subscription Page$plural."
     echo ""
 
+    [string]$resulttotal=$result_total
+    if ($result_total -ne 1)
+    {
+        $plural="s"
+    }
+    else
+    {
+        $plural=""
+    }
+    echo "Found $resulttotal Subscription$plural."
+    echo ""
+
     for ($p = 0; $p -lt $PageCount; $p++)
     {
 
         # Get current hashtable element count
         $len=$workingHash.WorkArray[$p].result_count
-        [string]$len_str=$len
-        if ($len -ne 1)
-        {
-            $plural="s"
-        }
-        else
-        {
-            $plural=""
-        }
-        echo "Found $len_str subscription$plural."
-        echo ""
 
         for ($i = 0; $i -lt $len; $i++)
         {
@@ -962,6 +924,10 @@ function Show-Menu {
     Write-Host "            Sandstorm Mod Manager             " -ForegroundColor Yellow
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
+    Write-Host "       $valid_Personal_Token" -ForegroundColor Green
+    Write-Host "       $valid_Personal_Username"
+    Write-Host "       $valid_Personal_UserID"
+    Write-Host ""
     Write-Host "    1. Process Mod Subscriptions"
     Write-Host ""
     Write-Host "    2. Select Mods to FORCE Download and Update"
@@ -974,14 +940,9 @@ function Show-Menu {
     Write-Host "    5. Would you like to view Verbose Mod Information (not saved)"
     Write-Host "       Current Setting: $verboseText" -ForegroundColor Green
     Write-Host ""
-    Write-Host "    6. Change OAuth token"
-    Write-Host "       $valid_Personal_Token" -ForegroundColor Green
-    Write-Host "       $valid_Personal_Username"
-    Write-Host "       $valid_Personal_UserID"
+    Write-Host "    6. Move Mod.io Mod Directory to new Location"
     Write-Host ""
-    Write-Host "    7. Move Mod.io Mod Directory to new Location"
-    Write-Host ""
-    Write-Host "    8. Exit"
+    Write-Host "    7. Exit"
     Write-Host ""
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
@@ -996,7 +957,7 @@ $headers = @{
 try {
     $response = Invoke-RestMethod -Uri https://api.mod.io/v1/me/ -Method Get -Headers $headers -ErrorAction Stop
 
-    $valid_Personal_Token = "Success: The token is valid!"
+    $valid_Personal_Token = "Success: Valid OAuth Token!"
     $valid_Personal_Username = "Authenticated as: $($response.username)"
     $valid_Personal_UserID = "User ID: $($response.id)"
 }
@@ -1006,16 +967,20 @@ catch [System.Net.WebException] {
     } else {
         Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Yellow
     }
-    Change-OAuth-Token
+    Write-Host "Run Game or Server to create Valid Token." -ForegroundColor Red
+    pause
+    exit
 }
 catch {
     Write-Host "An unexpected error occurred: $($_.Exception.Message)" -ForegroundColor Red
-    Change-OAuth-Token
+    Write-Host "Run Game or Server to create Valid Token." -ForegroundColor Red
+    pause
+    exit
 }
 
 do {
     Show-Menu
-    $selection = Read-Host -Prompt "Please enter your selection (1-8)"
+    $selection = Read-Host -Prompt "Please enter your selection (1-7)"
     
     switch ($selection) {
         '1' {
@@ -1040,28 +1005,21 @@ do {
             $verbose = 1 - $verbose
         }
         '6' {
-            Change-OAuth-Token
-            if (Test-Path token.cfg)
-            {
-                $token=Get-Content token.cfg
-            }
-        }
-        '7' {
             .\Insurgency-Sandstorm-mod.io-Mover\Move_Sandstorm_modio_Directory.bat
         }
-        '8' {
+        '7' {
             Write-Host "`nExiting the script. Goodbye!" -ForegroundColor Yellow
             Start-Sleep -Seconds 1
             Exit
         }
         default {
-            Write-Host "`nInvalid choice! Please select a number from 1 to 8." -ForegroundColor Red
+            Write-Host "`nInvalid choice! Please select a number from 1 to 7." -ForegroundColor Red
         }
     }
     
-    if ($selection -ne '4' -and $selection -ne '5' -and $selection -ne '7' -and $selection -ne '8') {
+    if ($selection -ne '4' -and $selection -ne '5' -and $selection -ne '6' -and $selection -ne '7') {
         Write-Host "`nPress any key to return to the menu..." -ForegroundColor White
         $null = [System.Console]::ReadKey($true)
     }
 
-} until ($selection -eq '8')
+} until ($selection -eq '7')
