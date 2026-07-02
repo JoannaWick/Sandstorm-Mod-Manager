@@ -38,6 +38,10 @@ Joanna Wick
 Change Log
 ==========
 
+0.2.3 (2026-07-02)
+
+    1. Added creation of globalsettings.backup
+
 0.2.2 (2026-06-12)
 
     1. Made the messages and interface look better and cleaned a couple of code issues

@@ -13,6 +13,7 @@ echo.
 :: Define path to mod.io globalsettings.json
 
 set "JSON_FILE=%LOCALAPPDATA%\mod.io\globalsettings.json"
+set "JSON_BACKUP_FILE=%LOCALAPPDATA%\mod.io\globalsettings.backup"
 
 :: Check if the file exists
 if not exist "%JSON_FILE%" (
@@ -182,6 +183,8 @@ echo } >> "%TEMP_FILE%"
 :: Overwrite the original file with the new configuration
 
 move /y "%TEMP_FILE%" "%JSON_FILE%" >nul
+
+xcopy "%JSON_FILE%" "%JSON_BACKUP_FILE%" /Y
 
 echo [SUCCESS] Mod storage path updated to %NEW_PATH%
 
