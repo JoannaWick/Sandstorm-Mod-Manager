@@ -1,7 +1,7 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.1.0
-### Date: 2026-07-02
+### Version: 1.1.1
+### Date: 2026-07-04
 
 ## YOU should Double-Click on Start_Sandstorm_Mod_Manager.bat to execute the program.
 
@@ -79,6 +79,12 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+1.1.1 (2026-07-04)
+
+    1. [FIXED] When using the Mod Mover the mod location was not updated in the Mod Manager.
+       If you tried processing, force downloading or unsubscribing to mods it would use the OLD
+       location for storing and deleting mods instead of where they were moved.
 
 1.1.0 (2026-07-02)
 

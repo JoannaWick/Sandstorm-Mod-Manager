@@ -1,11 +1,13 @@
 <#PSScriptInfo
-.VERSION 1.1.0
+.VERSION 1.1.1
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
 #>
 
 Set-Location -Path $PSScriptRoot
+
+$Version = "1.1.1" 
 
 $settingsPath = Join-Path $env:LOCALAPPDATA "mod.io\globalsettings.json"
 
@@ -51,12 +53,8 @@ if ($Settings_Json.RootLocalStoragePath -ne $Backup_Json.RootLocalStoragePath) {
 $destination=$StoragePath.RootLocalStoragePath
 $destination=$destination.Replace('/', '\')
 $destination_Store=$destination
-$jsonPathing = $destination
 $verbose = 0
 $global:forced_updates = 0
-$totalMBdownloaded = 0
-$totalMBdiskStorage = 0
-$totalTimeDownloading = 0
 
 # Get Sandstorm OAuth Token and UserID
 
@@ -87,9 +85,9 @@ $enable_testing=0 # 0 - Disabled, 1 - Test Json output
 if($enable_testing -eq 1)
 {
     $finalpath="254\metadata\state.json"
-    if (Test-Path $jsonPathing$finalpath) {
-        echo "getting state.json $jsonPathing$finalpath"
-        $getstatejson = Get-Content -Raw -Path $jsonPathing$finalpath | ConvertFrom-Json
+    if (Test-Path $destination$finalpath) {
+        echo "getting state.json $destination$finalpath"
+        $getstatejson = Get-Content -Raw -Path $destination$finalpath | ConvertFrom-Json
     }
 
     # 1. Convert your object to JSON
@@ -501,6 +499,10 @@ function Process-Subscriptions
     $error_success = 0
     $error_warning = 0
     $error_fatal = 0
+
+    $totalMBdownloaded = 0
+    $totalMBdiskStorage = 0
+    $totalTimeDownloading = 0
 
     $dataOffset=0
     $dataLimit=100
@@ -922,6 +924,7 @@ function Show-Menu {
     Write-Host ""
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host "            Sandstorm Mod Manager             " -ForegroundColor Yellow
+    Write-Host "               Version: $Version                 " -ForegroundColor DarkYellow
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "       $valid_Personal_Token" -ForegroundColor Green
@@ -1006,6 +1009,15 @@ do {
         }
         '6' {
             .\Insurgency-Sandstorm-mod.io-Mover\Move_Sandstorm_modio_Directory.bat
+            $settingsPath = Join-Path $env:LOCALAPPDATA "mod.io\globalsettings.json"
+
+            if (Test-Path $settingsPath) {
+                $StoragePath = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+            }
+
+            $destination=$StoragePath.RootLocalStoragePath
+            $destination=$destination.Replace('/', '\')
+            $destination_Store=$destination
         }
         '7' {
             Write-Host "`nExiting the script. Goodbye!" -ForegroundColor Yellow
