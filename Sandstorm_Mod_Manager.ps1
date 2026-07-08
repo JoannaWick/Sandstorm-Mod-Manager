@@ -59,6 +59,7 @@ $global:forced_updates = 0
 # Get Sandstorm OAuth Token and UserID
 
 $userName = ("$env:LOCALAPPDATA" -split '\\')[-3]
+$userName = $userName -replace ' ', ''
 $mod_io_254_user="$env:LOCALAPPDATA\mod.io\254\$userName\user.json" 
 $mod_io_254_server="$env:LOCALAPPDATA\mod.io\254\ModServer\user.json" 
 
