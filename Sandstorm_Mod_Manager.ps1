@@ -9,7 +9,7 @@ Set-Location -Path $PSScriptRoot
 
 $Version = "1.1.1" 
 
-$settingsPath = Join-Path $env:LOCALAPPDATA "mod.io\globalsettings.json"
+$settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
 
 if (Test-Path $settingsPath) {
     $StoragePath = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
@@ -23,7 +23,7 @@ else
 
 # Create Backup of globalsettings.json
 
-$backupsettingsPath = Join-Path $env:LOCALAPPDATA "mod.io\globalsettings.backup"
+$backupsettingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.backup"
 
 if(-not(Test-Path "$backupsettingsPath"))
 {
@@ -58,7 +58,7 @@ $global:forced_updates = 0
 
 # Get Sandstorm OAuth Token and UserID
 
-$userName = ($env:LOCALAPPDATA -split '\\')[-3]
+$userName = ("$env:LOCALAPPDATA" -split '\\')[-3]
 $mod_io_254_user="$env:LOCALAPPDATA\mod.io\254\$userName\user.json" 
 $mod_io_254_server="$env:LOCALAPPDATA\mod.io\254\ModServer\user.json" 
 
