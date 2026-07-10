@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.1.1
+.VERSION 1.1.3
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -7,7 +7,7 @@
 
 Set-Location -Path $PSScriptRoot
 
-$Version = "1.1.1" 
+$Version = "1.1.3" 
 
 $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
 
@@ -439,7 +439,7 @@ function Mod-Test
 	if ($FolderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) 
     {
        # Store the selected folder path in a variable
- 	    $destination = $FolderBrowser.SelectedPath+"\mod.io\"
+ 	    $destination = $FolderBrowser.SelectedPath.TrimEnd('\')+"\mod.io\"
     }
     else
     {
