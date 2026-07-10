@@ -81,9 +81,11 @@ Change Log
 ==========
 
 1.1.3 (2026-07-08)
+
     1. [FIXED] When selecting test directory and it is drive root then there would be two // instead of just one /
 
 1.1.2 (2026-07-08)
+
     1. [FIXED Sandstorm removes all spaces used in the User Account Name when creating the Directory inside %localappdata%\mod.io\254\[UserName] causing Sandstorm Mod Manager to not find the Directory.  If the Windows Account you are using is My Name Sandstorm would shorten it to MyName and the Mod Manager wouldn't find it.
 
 1.1.1 (2026-07-04)
