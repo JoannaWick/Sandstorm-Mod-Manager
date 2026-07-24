@@ -1,7 +1,7 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.1.3
-### Date: 2026-07-10
+### Version: 1.2.0
+### Date: 2026-07-23
 
 ## YOU should Double-Click on Start_Sandstorm_Mod_Manager.bat to execute the program.
 
@@ -79,6 +79,24 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+1.2.0 (2026-07-23)
+    1. [CHANGED] The Sandstorm_mod_Mover.bat and directory has been removed.  
+       A much faster Powershell version has been added to Sandstorm_Mod_Manager.ps1 script.
+    2. [ADDED] Write-WrappedHost funtion to wrap long text lines to fit window width.
+    3. [ADDED] Modio_mod-directory funtion to open a GUI for select where to store mod
+       files.  If the GUI is canceled the selected directory will be C:\Users\Public\mod.io
+    4. [REMOVED] The Number 4 Testing feature
+    5. [ADDED] Only the last 11 state[DATE].json backup files are kept.
+    6. [DISABLED] globalsettings.backup mismatch restore as it was restoring on a
+       false positive check.
+    7. {CHANGED] from Grid-Output GUI for Force DL and Unsubscribe to using 
+       System.Windows.Forms.  This allows for more control over the window for style,
+       positioning and size based upon the screen size.
+
+1.1.4 (2026-07-18)
+
+    1. [CHANGED] When window opens it will now center horizontally and move to the top of the screen and extend to the task bar.
 
 1.1.3 (2026-07-08)
 

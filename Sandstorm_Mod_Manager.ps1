@@ -1,13 +1,52 @@
 <#PSScriptInfo
-.VERSION 1.1.3
+.VERSION 1.2.0
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
 #>
 
-Set-Location -Path $PSScriptRoot
+param(
+    [string]$batchLaunch=0
+)
 
-$Version = "1.1.3" 
+$Version = "1.2.0" 
+
+# Load the required .NET assembly
+Add-Type -AssemblyName System.Windows.Forms
+
+# Fetch the working area of the primary display
+$workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+
+# Output the width and height
+$screenWidth  = ($workingArea.Width-1024)/2
+$screenHeight = $workingArea.Height
+
+# Definition for User32 MoveWindow
+$TypeDefinition = @"
+using System;
+using System.Runtime.InteropServices;
+public class Window {
+    [DllImport("user32.dll")]
+    public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+}
+"@
+Add-Type -TypeDefinition $TypeDefinition
+
+if ($batchLaunch -eq 0)
+{
+    # Get the current Powershell process window handle
+    $hWnd = (Get-Process -Id $PID).MainWindowHandle
+}
+else
+{
+    # Get the current cmd.exe window handle that launched Powershell process
+    $parentID = (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").ParentProcessId
+    $hWnd = (Get-Process -Id $parentID).MainWindowHandle
+}
+# Move window to of screen + 2 pixels center horizontally and resize it (Width=1024, Height=max height - taskbar)
+[void][Window]::MoveWindow($hWnd, $screenWidth, 2, 1024, $screenHeight, $true)
+
+Set-Location -Path $PSScriptRoot
 
 $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
 
@@ -40,15 +79,15 @@ $Settings_Json = Get-Content -Raw -Path $targetFile | ConvertFrom-Json
 $Backup_Json = Get-Content -Raw -Path $backupFile | ConvertFrom-Json
 
 # Compare paths (case-insensitive for directory paths)
-if ($Settings_Json.RootLocalStoragePath -ne $Backup_Json.RootLocalStoragePath) {
-    Write-Host "Mismatch found! Restoring backup..." -ForegroundColor Yellow
+#if ($Settings_Json.RootLocalStoragePath -ne $Backup_Json.RootLocalStoragePath) {
+#    Write-Host "Mismatch found! Restoring backup..." -ForegroundColor Yellow
     
-    # Overwrite the active file with the backup
-    Copy-Item -Path $backupFile -Destination $targetFile -Force
+#    # Overwrite the active file with the backup
+#    Copy-Item -Path $backupFile -Destination $targetFile -Force
     
-    Write-Host "Restore complete." -ForegroundColor Green
-    pause
-}
+#    Write-Host "Restore complete." -ForegroundColor Green
+#    pause
+#}
 
 $destination=$StoragePath.RootLocalStoragePath
 $destination=$destination.Replace('/', '\')
@@ -123,6 +162,141 @@ function User-Confirm
 	return $true
 }
 
+<#
+    Word Wrap long text lines and allow for fore and background colors
+#>
+
+function Write-WrappedHost {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Text,
+        
+        [string]$ForegroundColor = 'Gray',
+        
+        [string]$BackgroundColor = 'Black'
+    )
+
+    # Get the current console buffer width, subtracting 1 to avoid forcing a newline
+    $width = $Host.UI.RawUI.WindowSize.Width - 1
+
+    # Split the string by spaces to get all individual words
+    $words = $Text -split ' '
+
+    $spaceCount = $Text.Length - $Text.TrimStart().Length
+    $currentLine = (" " * ($spaceCount/2))
+#    $currentLine = ""
+
+    foreach ($word in $words) {
+        # Test if adding the next word exceeds the window width
+        if (($currentLine.Length + $word.Length + 1) -gt $width) {
+            # Print current line, then reset
+            Write-Host $currentLine -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
+            $currentLine = $word
+        } else {
+            # Otherwise, append the word with a space
+            if ($currentLine) { $currentLine += " " }
+            $currentLine += $word
+        }
+    }
+    # Output the remaining text
+    if ($currentLine) {
+        Write-Host $currentLine -ForegroundColor $ForegroundColor -BackgroundColor $BackgroundColor
+    }
+}
+
+Function mod_GUI_selector
+{
+    param (
+        [string[]]$ModList,
+        [string]$GUItitle
+    )
+
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    # Fetch the working area of the primary display
+    $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+
+    # Output the width and height
+    $screenHeight = $workingArea.Height/2
+
+    # Create Form Layout
+    $Form = New-Object System.Windows.Forms.Form
+    $Form.Text = $GUItitle
+    $Form.Size = New-Object System.Drawing.Size(650, $screenHeight)
+    $Form.StartPosition = "CenterScreen"
+
+    # Create DataGridView
+    $DataGridView = New-Object System.Windows.Forms.DataGridView
+    $DataGridView.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $DataGridView.ReadOnly = $true
+    $DataGridView.AllowUserToAddRows = $false
+    $DataGridView.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
+
+    # --- KEY MULTI-SELECT SETTINGS ---
+    $DataGridView.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+    $DataGridView.MultiSelect = $true  # Allows Ctrl+Click and Shift+Click selections
+
+    # Define Column Layout
+    $Column = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
+    $Column.HeaderText = "Mod Name"
+    $Column.Name = "ModName"
+    [void]$DataGridView.Columns.Add($Column)
+
+    # Populating Rows
+    foreach ($Mod in $ModList) {
+        [void]$DataGridView.Rows.Add($Mod)
+    }
+
+    # Create a Bottom Button Panel
+    $ButtonPanel = New-Object System.Windows.Forms.Panel
+    $ButtonPanel.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $ButtonPanel.Height = 50
+
+    # Create OK Button
+    $OKButton = New-Object System.Windows.Forms.Button
+    $OKButton.Text = "OK"
+    $OKButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $OKButton.Location = New-Object System.Drawing.Point(230, 10)
+    $OKButton.Size = New-Object System.Drawing.Size(85, 30)
+
+    # Create Cancel Button
+    $CancelButton = New-Object System.Windows.Forms.Button
+    $CancelButton.Text = "Cancel"
+    $CancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $CancelButton.Location = New-Object System.Drawing.Point(330, 10)
+    $CancelButton.Size = New-Object System.Drawing.Size(85, 30)
+
+    # Attach buttons to the panel, and panel to the form
+    $ButtonPanel.Controls.AddRange(@($OKButton, $CancelButton))
+    $Form.Controls.Add($DataGridView)  # Added first so Dock.Fill respects the panel space
+    $Form.Controls.Add($ButtonPanel)
+    $Form.AcceptButton = $OKButton
+    $Form.CancelButton = $CancelButton
+
+    # Show the window dialog and capture the result
+    $Result = $Form.ShowDialog()
+
+    # Process Selected Rows if user clicked OK
+    if ($Result -eq [System.Windows.Forms.DialogResult]::OK) {
+        # Extract the string cell value from each selected grid row
+        $SelectedMods = foreach ($Row in $DataGridView.SelectedRows) {
+            $Row.Cells["ModName"].Value
+        }
+    
+        # Reverse the collection so output matches the top-to-bottom visual order selected
+        [array]::Reverse($SelectedMods)
+    } else {
+        $SelectedMods = $null
+    }
+
+    # Clean up memory
+    $Form.Dispose()
+
+    return $SelectedMods
+}
+
 # Display GUI Selector of all subscribed mods and ask user to
 # select any number of the mods to force a download and update
 function Mod-Reset
@@ -173,8 +347,8 @@ function Mod-Reset
 
     $ModList.Sort()
 
-    # Pass to Out-GridView for interactive multi-selection
-    $SelectedMods = $ModList | Out-GridView -Title "Select one or more Mods to Update" -OutputMode Multiple
+    $GUItitle = "Select One or More Mods to Force Update"
+    $SelectedMods = mod_GUI_selector -ModList $ModList -GUItitle $GUItitle
 
     if ($null -eq $SelectedMods -or $SelectedMods.Count -eq 0) {
         Write-Host "No Mods were selected" -ForegroundColor Red
@@ -279,8 +453,8 @@ function Mod-Unsub
 
     $ModList.Sort()
 
-    # Pass to Out-GridView for interactive multi-selection
-    $SelectedMods = $ModList | Out-GridView -Title "Select one or more Mods you would like to Unsubscribe" -OutputMode Multiple
+    $GUItitle = "Select One or More Mods to UNSUBSCRIBE and DELETE"
+    $SelectedMods = mod_GUI_selector -ModList $ModList -GUItitle $GUItitle
 
     if ($null -eq $SelectedMods -or $SelectedMods.Count -eq 0) {
         Write-Host "No Mods were selected" -ForegroundColor Red
@@ -415,8 +589,7 @@ function Mod-Unsub
     }
 }
 
-# 
-function Mod-Test
+function Modio_mod_directory
 {
 	# Load the Windows Forms assembly quietly
 	Add-Type -AssemblyName System.Windows.Forms
@@ -429,8 +602,8 @@ function Mod-Test
 	# Create the folder browser dialog object
 	$FolderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
 
-	# Set custom prompt description text
-	$FolderBrowser.Description = "Please select a target directory"
+   	# Set custom prompt description text
+    $FolderBrowser.Description = "Please select Directory to store Mod Files"
 
 	# Show the 'New Folder' button inside the GUI
 	$FolderBrowser.ShowNewFolderButton = $true
@@ -439,11 +612,12 @@ function Mod-Test
 	if ($FolderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) 
     {
        # Store the selected folder path in a variable
- 	    $destination = $FolderBrowser.SelectedPath.TrimEnd('\')+"\mod.io\"
+ 	    $destination = $FolderBrowser.SelectedPath
+ 	    $destination = $destination.TrimEnd('\')
     }
     else
     {
-        $destination=$destination_Store
+        $destination="C:\Users\Public"
     }
 
     # Cleanup
@@ -452,24 +626,90 @@ function Mod-Test
     return $destination
 }
 
-if (-not(Test-Path ModList.json))
+function move_Sandstorm_mods
 {
-    echo "As this is your first time running this script all of your subscribed mods"
-    echo "will be re-downloaded and updated to make sure they are all up to date."
-    echo "After this process only newly updated or subscribed mods will be downloaded"
-    echo "and updated. Do not Abort this process once started."
-    echo ""
+    Clear-Host
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "             Move Sandstorm Mods              " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
 
-    if((User-Confirm "Would you like to read the Sandstorm_Mod_Manager_Guide.pdf now?") -eq $true)
+    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
+
+    if (Test-Path $settingsPath) {
+        $globalsettings_old = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+        $globalSettingSource = $globalsettings_old.RootLocalStoragePath
+        $globalSettingSource = $globalSettingSource.Replace('/', '\')
+    }
+    else
     {
-        Start-Process "Sandstorm_Mod_Manager_Guide.pdf"
+        Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
+        Write-Host ""
+        Pause
+        return
+    }
+    Write-Host "Current Mod Storage: $globalSettingSource" -ForegroundColor Green
+    Write-Host ""
+    Write-WrappedHost -Text "Select the directory path to store Mod.io mod downloads. If no directory path selected they will be stored in C:\Users\Public\mod.io.$Base_Server_ID" -ForegroundColor DarkYellow
+
+    $destination = Modio_mod_directory
+
+    Write-Host ""
+
+    if(-not(User-Confirm "Do you really want to move Mods to [$destination]?"))
+    {
+        return
+    }
+    else
+    {
+        $destination = "$destination\mod.io"
+
+        $rootdestination=$destination.Replace('\', '/')
+                    
+        $globalsettings=@{
+            RootLocalStoragePath = "$rootdestination"
+        }
+
+        $globalsettings | ConvertTo-Json | Set-Content "$settingsPath"
+        Write-Host ""
+        Write-Host "Saved $settingsPath RootLocalStoragePath = $rootdestination"
+
+        $modsStoredPath = $stateJSON_Path -replace "metadata*"
+
+        Write-Host ""
+        Write-Host "Source Directory path: $globalSettingSource" -ForegroundColor Yellow
+        Write-Host "Destination Directory path: $rootdestination" -ForegroundColor Yellow
+
+        #copy cache, metadata and mods directory    
+        robocopy "$globalSettingSource" "$rootdestination" /MOVE /E
+                        
+        $newStatejsonPath = "$destination\254\metadata\state.json"
+        $newModsPath = "$destination\254\mods"
+                     
+        # Load and convert JSON to a PowerShell object
+        $state = Get-Content -Path $newStatejsonPath -Raw | ConvertFrom-Json
+
+        # Loop through the Mods array and change the path
+        $state.Mods | ForEach-Object {
+            # Replace the path with the C: drive (adjust folder structure as needed)
+            $_.PSObject.Properties['PathOnDisk'].Value = -join ("$newModsPath", "\") + ($_.PSObject.Properties['PathOnDisk'].Value | Split-Path -Leaf)
+        }
+
+        # 1. Convert your object to JSON
+        $jsonc = $state | ConvertTo-Json -Compress -Depth 100
+                            
+        # 2. Fix ONLY Unicode characters (e.g., \u0027) while keeping literal \n untouched
+        $cleanJson = [regex]::Replace($jsonc, '\\u([0-9a-fA-F]{4})', { 
+            param($match) [char][int]"0x$($match.Groups[1].Value)" 
+        })
+
+        # 3. Export to a valid UTF-8 file
+        $cleanJson | Out-File "$newStatejsonPath" -Encoding utf8
+
+        $cleanupPath = "$destination\254\metadata"
+        Get-ChildItem -Path "$cleanupPath" -File | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 | Remove-Item -Force
         pause
     }
-
-	$ModListData=@{}
-    # Write initial ModList.json file
-    # (so that the user doesn't have to go trough the setup again if the script doesn't run completely)
-    $ModListData | ConvertTo-Json | Set-Content ModList.json
 }
 
 function Process-Subscriptions
@@ -805,6 +1045,9 @@ function Process-Subscriptions
     # 3. Export to a valid UTF-8 file
     $cleanJson | Out-File "$destinationMetadata$jsonfilename" -Encoding utf8
 
+    $cleanupPath = "$destination\254\metadata"
+    Get-ChildItem -Path "$cleanupPath" -File | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 | Remove-Item -Force
+
     # Display Total DL Time, Total GB downloaded, Total Disk Space Used 
     echo "=============================================="
     echo ""
@@ -938,18 +1181,35 @@ function Show-Menu {
     Write-Host ""
     Write-Host "    3. Select Mods to Unsubscribe and Delete"
     Write-Host ""
-    Write-Host "    4. Install/unpack mods to different location for testing purposes"
-    Write-Host "       Current mod.io path: $destination" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "    5. Would you like to view Verbose Mod Information (not saved)"
+    Write-Host "    4. Would you like to view Verbose Mod Information (not saved)"
     Write-Host "       Current Setting: $verboseText" -ForegroundColor Green
     Write-Host ""
-    Write-Host "    6. Move Mod.io Mod Directory to new Location"
+    Write-Host "    5. Move Mod.io Mod Directory to new Location"
     Write-Host ""
-    Write-Host "    7. Exit"
+#    Write-Host "    6. Install/unpack mods to different location for testing purposes"
+#    Write-Host "       Current mod.io path: $destination" -ForegroundColor Green
+#    Write-Host ""
+    Write-Host "    6. Exit"
     Write-Host ""
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
+}
+
+if (-not(Test-Path ModList.json))
+{
+    Write-WrappedHost -Text "As this is your first time running this script all of your subscribed mods will be re-downloaded and updated to make sure they are all up to date. After this process only newly updated or subscribed mods will be downloaded and updated. Do not Abort this process once started."
+    echo ""
+
+    if((User-Confirm "Would you like to read the Sandstorm_Mod_Manager_Guide.pdf now?") -eq $true)
+    {
+        Start-Process "Sandstorm_Mod_Manager_Guide.pdf"
+        pause
+    }
+
+	$ModListData=@{}
+    # Write initial ModList.json file
+    # (so that the user doesn't have to go trough the setup again if the script doesn't run completely)
+    $ModListData | ConvertTo-Json | Set-Content ModList.json
 }
 
 $url = "https://api.mod.io/v1/me/"
@@ -984,7 +1244,8 @@ catch {
 
 do {
     Show-Menu
-    $selection = Read-Host -Prompt "Please enter your selection (1-7)"
+    $selectionCount = 6
+    $selection = Read-Host -Prompt "Please enter your selection (1-$selectionCount)"
     
     switch ($selection) {
         '1' {
@@ -1003,36 +1264,24 @@ do {
             Mod-Unsub
         }
         '4' {
-            $destination = Mod-Test
-        }
-        '5' {
             $verbose = 1 - $verbose
         }
-        '6' {
-            .\Insurgency-Sandstorm-mod.io-Mover\Move_Sandstorm_modio_Directory.bat
-            $settingsPath = Join-Path $env:LOCALAPPDATA "mod.io\globalsettings.json"
-
-            if (Test-Path $settingsPath) {
-                $StoragePath = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
-            }
-
-            $destination=$StoragePath.RootLocalStoragePath
-            $destination=$destination.Replace('/', '\')
-            $destination_Store=$destination
+        '5' {
+            move_Sandstorm_mods
         }
-        '7' {
+        '6' {
             Write-Host "`nExiting the script. Goodbye!" -ForegroundColor Yellow
             Start-Sleep -Seconds 1
             Exit
         }
         default {
-            Write-Host "`nInvalid choice! Please select a number from 1 to 7." -ForegroundColor Red
+            Write-Host "`nInvalid choice! Please select a number from 1 to $selectionCount." -ForegroundColor Red
         }
     }
     
-    if ($selection -ne '4' -and $selection -ne '5' -and $selection -ne '6' -and $selection -ne '7') {
+    if ($selection -ne '4' -and $selection -ne '5') {
         Write-Host "`nPress any key to return to the menu..." -ForegroundColor White
         $null = [System.Console]::ReadKey($true)
     }
 
-} until ($selection -eq '7')
+} until ($selection -eq $selectionCount)
