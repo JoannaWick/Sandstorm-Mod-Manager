@@ -81,6 +81,7 @@ Change Log
 ==========
 
 1.2.0 (2026-07-23)
+
     1. [CHANGED] The Sandstorm_mod_Mover.bat and directory has been removed.  
        A much faster Powershell version has been added to Sandstorm_Mod_Manager.ps1 script.
     2. [ADDED] Write-WrappedHost funtion to wrap long text lines to fit window width.
