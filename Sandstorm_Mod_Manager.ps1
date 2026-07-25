@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.2.0
+.VERSION 1.2.1
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -9,7 +9,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "1.2.0" 
+$Version = "1.2.1" 
 
 # Load the required .NET assembly
 Add-Type -AssemblyName System.Windows.Forms
@@ -662,7 +662,8 @@ function move_Sandstorm_mods
     }
     else
     {
-        $destination = "$destination\mod.io"
+        $destination254 = "$destination\mod.io\254"
+        $destination = "$destination\mod.io\"
 
         $rootdestination=$destination.Replace('\', '/')
                     
@@ -683,8 +684,8 @@ function move_Sandstorm_mods
         #copy cache, metadata and mods directory    
         robocopy "$globalSettingSource" "$rootdestination" /MOVE /E
                         
-        $newStatejsonPath = "$destination\254\metadata\state.json"
-        $newModsPath = "$destination\254\mods"
+        $newStatejsonPath = "$destination254\metadata\state.json"
+        $newModsPath = "$destination254\mods"
                      
         # Load and convert JSON to a PowerShell object
         $state = Get-Content -Path $newStatejsonPath -Raw | ConvertFrom-Json
@@ -706,7 +707,7 @@ function move_Sandstorm_mods
         # 3. Export to a valid UTF-8 file
         $cleanJson | Out-File "$newStatejsonPath" -Encoding utf8
 
-        $cleanupPath = "$destination\254\metadata"
+        $cleanupPath = "$destination254\metadata"
         Get-ChildItem -Path "$cleanupPath" -File | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 | Remove-Item -Force
         pause
     }
@@ -1185,10 +1186,15 @@ function Show-Menu {
     Write-Host "       Current Setting: $verboseText" -ForegroundColor Green
     Write-Host ""
     Write-Host "    5. Move Mod.io Mod Directory to new Location"
+    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
+
+    if (Test-Path $settingsPath) {
+        $globalsettings_old = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+        $globalSettingSource = $globalsettings_old.RootLocalStoragePath
+        $globalSettingSource = $globalSettingSource.Replace('/', '\')
+    }
+    Write-Host "       Current Mod Storage: $globalSettingSource" -ForegroundColor Green
     Write-Host ""
-#    Write-Host "    6. Install/unpack mods to different location for testing purposes"
-#    Write-Host "       Current mod.io path: $destination" -ForegroundColor Green
-#    Write-Host ""
     Write-Host "    6. Exit"
     Write-Host ""
     Write-Host "==============================================" -ForegroundColor Cyan
