@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.2.1
+.VERSION 1.2.5
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -9,7 +9,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "1.2.1" 
+$Version = "1.2.5" 
 
 # Load the required .NET assembly
 Add-Type -AssemblyName System.Windows.Forms
@@ -103,10 +103,10 @@ $mod_io_254_user="$env:LOCALAPPDATA\mod.io\254\$userName\user.json"
 $mod_io_254_server="$env:LOCALAPPDATA\mod.io\254\ModServer\user.json" 
 
 if (Test-Path $mod_io_254_user) {
-    $getstatejson = Get-Content -Raw -Path $mod_io_254_user | ConvertFrom-Json
+    $getuserjson = Get-Content -Raw -Path $mod_io_254_user | ConvertFrom-Json
 }
 elseif (Test-Path $mod_io_254_server) {
-    $getstatejson = Get-Content -Raw -Path $mod_io_254_server | ConvertFrom-Json
+    $getuserjson = Get-Content -Raw -Path $mod_io_254_server | ConvertFrom-Json
 }
 else {
     Write-Host "MISSING $mod_io_254_user" -ForegroundColor Red
@@ -116,20 +116,20 @@ else {
     exit
 }
 
-[string]$token=$getstatejson.Oauth.token
-$UserID=$getstatejson.Profile.id
+[string]$token=$getuserjson.Oauth.token
+$UserID=$getuserjson.Profile.id
 
+$finalpath="254\metadata\state.json"
+$modsDirectoryPath = Join-Path -Path $destination -ChildPath "254\mods"
+
+if (Test-Path $destination$finalpath) {
+    $getstatejson = Get-Content -Raw -Path $destination$finalpath | ConvertFrom-Json
+}
 
 $enable_testing=0 # 0 - Disabled, 1 - Test Json output 
 
 if($enable_testing -eq 1)
 {
-    $finalpath="254\metadata\state.json"
-    if (Test-Path $destination$finalpath) {
-        echo "getting state.json $destination$finalpath"
-        $getstatejson = Get-Content -Raw -Path $destination$finalpath | ConvertFrom-Json
-    }
-
     # 1. Convert your object to JSON
     $jsonSU = $getstatejson | ConvertTo-Json -Depth 100
 
@@ -254,22 +254,44 @@ Function mod_GUI_selector
     $ButtonPanel.Dock = [System.Windows.Forms.DockStyle]::Bottom
     $ButtonPanel.Height = 50
 
+    # Create Clear Button
+    $ClearButton = New-Object System.Windows.Forms.Button
+    $ClearButton.Text = "Clear All"
+    $ClearButton.Location = New-Object System.Drawing.Point(35, 10)
+    $ClearButton.Size = New-Object System.Drawing.Size(85, 30)
+
+    # Bind the Clear method to the button
+    $ClearButton.Add_Click({
+        $dataGridView.ClearSelection()
+    })
+
+    # Create Select All Button
+    $SelectAllButton = New-Object System.Windows.Forms.Button
+    $SelectAllButton.Text = "Select All"
+    $SelectAllButton.Location = New-Object System.Drawing.Point(135, 10)
+    $SelectAllButton.Size = New-Object System.Drawing.Size(85, 30)
+
+    # Bind the SelectAll method to the button
+    $SelectAllButton.Add_Click({
+        $dataGridView.SelectAll()
+    })
+
     # Create OK Button
     $OKButton = New-Object System.Windows.Forms.Button
     $OKButton.Text = "OK"
     $OKButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    $OKButton.Location = New-Object System.Drawing.Point(230, 10)
+    $OKButton.Location = New-Object System.Drawing.Point(410, 10)
     $OKButton.Size = New-Object System.Drawing.Size(85, 30)
 
     # Create Cancel Button
     $CancelButton = New-Object System.Windows.Forms.Button
     $CancelButton.Text = "Cancel"
     $CancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-    $CancelButton.Location = New-Object System.Drawing.Point(330, 10)
+    $CancelButton.Location = New-Object System.Drawing.Point(510, 10)
     $CancelButton.Size = New-Object System.Drawing.Size(85, 30)
 
     # Attach buttons to the panel, and panel to the form
-    $ButtonPanel.Controls.AddRange(@($OKButton, $CancelButton))
+    $ButtonPanel.Controls.AddRange(@($OKButton, $CancelButton, $SelectAllButton, $ClearButton))
     $Form.Controls.Add($DataGridView)  # Added first so Dock.Fill respects the panel space
     $Form.Controls.Add($ButtonPanel)
     $Form.AcceptButton = $OKButton
@@ -1175,6 +1197,8 @@ function Show-Menu {
     Write-Host "       $valid_Personal_Token" -ForegroundColor Green
     Write-Host "       $valid_Personal_Username"
     Write-Host "       $valid_Personal_UserID"
+    Write-Host "       Total Subscriptions: $Subscription_Count"
+    Write-Host "       Mod Storage: $ModStorageSize"
     Write-Host ""
     Write-Host "    1. Process Mod Subscriptions"
     Write-Host ""
@@ -1216,6 +1240,32 @@ if (-not(Test-Path ModList.json))
     # Write initial ModList.json file
     # (so that the user doesn't have to go trough the setup again if the script doesn't run completely)
     $ModListData | ConvertTo-Json | Set-Content ModList.json
+
+    $Subscription_Count = 0
+    # Scan state.json building initial ModList.json so mods not downloaded on first run.
+    $ModListData=Get-Content ModList.json | ConvertFrom-Json
+    # Loop through the Mods array and change the path
+    $getstatejson.Mods | ForEach-Object {
+        # Replace the path with the C: drive (adjust folder structure as needed)
+        $subname = $_.PSObject.Properties['Profile'].Value
+        $modid = $subname.modfile.'mod_id'
+        $date_added = $subname.modfile.'date_added'
+        $name = $subname.name
+
+        $ModListData | Add-Member -Name $modid -Value @{} -MemberType NoteProperty
+	    $ModListData.${modid}.date_added=$date_added
+        $ModListData.${modid}.name = $name
+        $Subscription_Count+=1
+    }
+
+    $ModListData | ConvertTo-Json | Set-Content ModList.json
+}
+else
+{
+   $Subscription_Count = 0
+   $getstatejson.Mods | ForEach-Object {
+        $Subscription_Count+=1
+   }
 }
 
 $url = "https://api.mod.io/v1/me/"
@@ -1247,6 +1297,8 @@ catch {
     pause
     exit
 }
+
+$ModStorageSize = "{0:N2} GB" -f ((Get-ChildItem -Path "$modsDirectoryPath" -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1GB)
 
 do {
     Show-Menu

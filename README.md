@@ -1,7 +1,7 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.2.1
-### Date: 2026-07-25
+### Version: 1.2.5
+### Date: 2026-08-05
 
 ## YOU should Double-Click on Start_Sandstorm_Mod_Manager.bat to execute the program.
 
@@ -31,10 +31,6 @@ The Download Progress Bar has been disabled because it slows the actual download
 could take 15-20+ minutes no matter how fast your connection.  With the Download Progress diabled the downloads
 are very fast.  After downloading the time to download and download speed with be shown for the file.
 An un-zip progress indicator that will run for each download.
-
-The first time you run the script it will re-download all of the mods you are subscribed and reinstall them,
-build a new state.json and store it's own update data for use next time you run the script.  I am doing this
-because sometimes the mod files that are actually stored do not match what the game thinks is stored.
 
 If you Unsubscribe to any mod on Mod.io just run this script and it will delete the directories containing
 those mods so you will not need to do it manually.
@@ -79,6 +75,17 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+1.2.5 (2026-08-05)
+
+    1. [ADDED] On first execution script will scan state.json to build ModList.json.  This 
+       will prevent downloading of all subscribed mods the first run.
+    2. [ADDED] "select All" and "Clear All" buttons to the Force Download and Un-Subscribe
+       GUIs.  This way you can force a re-download of all mods or a mass unsubscribe of
+       all mods without having to go to Mod.Io
+    3. [ADDED] "Total Sunscriptions: " to Main Menu
+    4. [ADDED] "Mod Storage: " showing total disk storage for all Mod downloads to Main Menu
+    5. [ADDED] Dirctory path to where mods stored shown below Move Mod.io selection.
 
 1.2.1 (2026-07-25)
 
