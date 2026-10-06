@@ -1711,9 +1711,6 @@ function Show-Menu {
 
 if (-not(Test-Path ModList.json))
 {
-    Write-WrappedHost -Text "As this is your first time running this script all of your subscribed mods will be re-downloaded and updated to make sure they are all up to date. After this process only newly updated or subscribed mods will be downloaded and updated. Do not Abort this process once started."
-    echo ""
-
     if((User-Confirm "Would you like to read the Sandstorm_Mod_Manager_Guide.pdf now?") -eq $true)
     {
         Start-Process "Sandstorm_Mod_Manager_Guide.pdf"
@@ -1744,12 +1741,10 @@ if (-not(Test-Path ModList.json))
 
     $ModListData | ConvertTo-Json | Set-Content ModList.json
 }
-else
-{
-   $Subscription_Count = 0
-   $getstatejson.Mods | ForEach-Object {
-        $Subscription_Count+=1
-   }
+
+$Subscription_Count = 0
+$getstatejson.Mods | ForEach-Object {
+    $Subscription_Count+=1
 }
 
 $url = "https://api.mod.io/v1/me/"
