@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.2.5
+.VERSION 1.4.0
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -9,19 +9,65 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "1.2.5" 
+$Version = "1.4.0" 
 
-# Load the required .NET assembly
-Add-Type -AssemblyName System.Windows.Forms
+<# 
+    Resize and center window
+#>
 
-# Fetch the working area of the primary display
-$workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+# Read the current OS build framework directly from memory
+$buildNumber = [Environment]::OSVersion.Version.Build
 
-# Output the width and height
-$screenWidth  = ($workingArea.Width-1024)/2
-$screenHeight = $workingArea.Height
+if ($buildNumber -ge 22000) {
 
-# Definition for User32 MoveWindow
+    Add-Type -AssemblyName System.Windows.Forms
+    $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+
+    # Output the width and height
+    $targetWidth  = $workingArea.Width / 2
+    $targetHeight = $workingArea.Height
+
+    $posX = [math]::Round(($workingArea.Width - $targetWidth) / 2)
+    $posY = [math]::Round(($workingArea.Height - $targetHeight) / 2)
+
+    # FIX: Define both MoveWindow AND GetForegroundWindow in a single C# block
+$Signature = @"
+using System;
+using System.Runtime.InteropServices;
+
+public class Win32 {
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+}
+"@
+    Add-Type -TypeDefinition $Signature -ErrorAction SilentlyContinue
+
+    # FIX: Snag the active UI window handle directly. 
+    # This completely bypasses process name filtering and permission blocks!
+    $hWnd = [Win32]::GetForegroundWindow()
+
+    if ($hWnd -ne [IntPtr]::Zero) {
+        # Move and resize the current hosting cmd window frame instantly
+        [void][Win32]::MoveWindow($hWnd, $posX, $posY, $targetWidth, $targetHeight, $true)
+    } else {
+        # Fallback to standard Mode Con formatting if running classic Conhost
+        mode con: cols=120 lines=40
+    }
+} else {
+    # Load the required .NET assembly
+    Add-Type -AssemblyName System.Windows.Forms
+
+    # Fetch the working area of the primary display
+    $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+
+    # Output the width and height
+    $screenWidth  = ($workingArea.Width-1024)/2
+    $screenHeight = $workingArea.Height
+
+    # Definition for User32 MoveWindow
 $TypeDefinition = @"
 using System;
 using System.Runtime.InteropServices;
@@ -30,21 +76,22 @@ public class Window {
     public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
 }
 "@
-Add-Type -TypeDefinition $TypeDefinition
+    Add-Type -TypeDefinition $TypeDefinition
 
-if ($batchLaunch -eq 0)
-{
-    # Get the current Powershell process window handle
-    $hWnd = (Get-Process -Id $PID).MainWindowHandle
+    if ($batchLaunch -eq 0)
+    {
+        # Get the current Powershell process window handle
+        $hWnd = (Get-Process -Id $PID).MainWindowHandle
+    }
+    else
+    {
+        # Get the current cmd.exe window handle that launched Powershell process
+        $parentID = (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").ParentProcessId
+        $hWnd = (Get-Process -Id $parentID).MainWindowHandle
+    }
+    # Move window to of screen + 2 pixels center horizontally and resize it (Width=1024, Height=max height - taskbar)
+    [void][Window]::MoveWindow($hWnd, $screenWidth, 2, 1024, $screenHeight, $true)
 }
-else
-{
-    # Get the current cmd.exe window handle that launched Powershell process
-    $parentID = (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").ParentProcessId
-    $hWnd = (Get-Process -Id $parentID).MainWindowHandle
-}
-# Move window to of screen + 2 pixels center horizontally and resize it (Width=1024, Height=max height - taskbar)
-[void][Window]::MoveWindow($hWnd, $screenWidth, 2, 1024, $screenHeight, $true)
 
 Set-Location -Path $PSScriptRoot
 
@@ -142,24 +189,232 @@ if($enable_testing -eq 1)
     $cleanJson | Out-File "state_Sandstorm.json" -Encoding utf8
 }
 
-# Used to simplify y/n prompts further in the script
+function Start-NetworkMonitor {
+    <#
+    .SYNOPSIS
+        Launches a real-time network traffic monitor at the lower-right corner of the screen. 
+        Hardened against Windows 11 Timer/Pipeline async teardown crashes.
+    #>
+    if ($Global:NetMonitorRunspace -ne $null) {
+        Write-Warning "Network Monitor is already running."
+        return
+    }
+
+    Write-Host "Starting Network Monitor..." -ForegroundColor Green
+
+    $Global:NetSyncHash = [hashtable]::Synchronized(@{})
+    $Global:NetSyncHash.CloseWindow = $false
+    $Global:NetSyncHash.IsInitialized = $false
+
+    $Global:NetMonitorRunspace = [runspacefactory]::CreateRunspace()
+    $Global:NetMonitorRunspace.Open()
+
+    $Global:NetMonitorRunspace.SessionStateProxy.SetVariable('NetSyncHash', $Global:NetSyncHash)
+    $Global:NetMonitorRunspace.SessionStateProxy.SetVariable('CurrentRunspace', $Global:NetMonitorRunspace)
+
+    $PowerShellInstance = [powershell]::Create()
+    $PowerShellInstance.Runspace = $Global:NetMonitorRunspace
+
+    [void]$PowerShellInstance.AddScript({
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            Add-Type -AssemblyName System.Windows.Forms.DataVisualization
+
+            # 1. Main Window Config
+            $Form = New-Object System.Windows.Forms.Form
+            $Form.Text = "Live Network Traffic Monitor"
+            $Form.Size = New-Object System.Drawing.Size(450, 360)
+            $Form.FormBorderStyle = "FixedDialog"
+            $Form.StartPosition = "Manual"
+            $Form.ControlBox = $false 
+
+            $PrimaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $X_Position = [math]::Round(($PrimaryScreen.Width - $Form.Width) / 2)
+            $Form.Location = New-Object System.Drawing.Point($X_Position, 0)
+
+            # 2. Controls & Labels
+            $Header = New-Object System.Windows.Forms.Label
+            $Header.Text = "Real-Time Network Activity"
+            $Header.Font = New-Object System.Drawing.Font("Arial", 12, [System.Drawing.FontStyle]::Bold)
+            $Header.Location = New-Object System.Drawing.Point(20, 15)
+            $Header.Size = New-Object System.Drawing.Size(400, 25)
+            $Form.Controls.Add($Header)
+
+            $LblLive = New-Object System.Windows.Forms.Label
+            $LblLive.Text = "Current Throughput:"
+            $LblLive.Font = New-Object System.Drawing.Font("Arial", 9, [System.Drawing.FontStyle]::Bold)
+            $LblLive.Location = New-Object System.Drawing.Point(20, 45)
+            $LblLive.Size = New-Object System.Drawing.Size(130, 20)
+            $Form.Controls.Add($LblLive)
+
+            $LblLiveStats = New-Object System.Windows.Forms.Label
+            $LblLiveStats.Text = "DL: 0.00 Mbps  |  UL: 0.00 Mbps"
+            $LblLiveStats.Font = New-Object System.Drawing.Font("Consolas", 10)
+            $LblLiveStats.Location = New-Object System.Drawing.Point(150, 45)
+            $LblLiveStats.Size = New-Object System.Drawing.Size(270, 20)
+            $LblLiveStats.TextAlign = [System.Drawing.ContentAlignment]::TopRight
+            $Form.Controls.Add($LblLiveStats)
+
+            # 3. Chart Setup
+            $Chart = New-Object System.Windows.Forms.DataVisualization.Charting.Chart
+            $Chart.Location = New-Object System.Drawing.Point(15, 75)
+            $Chart.Size = New-Object System.Drawing.Size(400, 230)
+
+            $ChartArea = New-Object System.Windows.Forms.DataVisualization.Charting.ChartArea
+            $ChartArea.AxisX.MajorGrid.LineColor = [System.Drawing.Color]::LightGray
+            $ChartArea.AxisY.MajorGrid.LineColor = [System.Drawing.Color]::LightGray
+            $ChartArea.AxisX.LabelStyle.Enabled = $false 
+            $ChartArea.AxisY.Title = "Mbps"
+            $Chart.ChartAreas.Add($ChartArea)
+
+            $SeriesDL = New-Object System.Windows.Forms.DataVisualization.Charting.Series -ArgumentList "Download"
+            $SeriesDL.ChartType = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
+            $SeriesDL.BorderWidth = 2
+            $SeriesDL.Color = [System.Drawing.Color]::DodgerBlue
+            $Chart.Series.Add($SeriesDL)
+
+            $SeriesUL = New-Object System.Windows.Forms.DataVisualization.Charting.Series -ArgumentList "Upload"
+            $SeriesUL.ChartType = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
+            $SeriesUL.BorderWidth = 2
+            $SeriesUL.Color = [System.Drawing.Color]::OrangeRed
+            $Chart.Series.Add($SeriesUL)
+
+            $Legend = New-Object System.Windows.Forms.DataVisualization.Charting.Legend
+            $Legend.Docking = [System.Windows.Forms.DataVisualization.Charting.Docking]::Top
+            $Chart.Legends.Add($Legend)
+            $Form.Controls.Add($Chart)
+
+            # 4. Engine Data Metric Collection Loop
+            $MaxPoints = 30
+            $Global:OldSample = Get-CimInstance -ClassName Win32_PerfRawData_Tcpip_NetworkInterface
+            
+            $MonitorTimer = New-Object System.Windows.Forms.Timer
+            $MonitorTimer.Interval = 1000
+
+            # Define the Tick logic explicitly as a reusable variable script block
+            $TickScript = {
+                try {
+                    # IF CLOSING SWITCH IS VISIBLE: Cut the wire immediately
+                    if ($NetSyncHash.CloseWindow) {
+                        $MonitorTimer.Stop()
+                        # Unbind the tick event to prevent Windows 11 OnTick invocation errors
+                        $MonitorTimer.remove_Tick($TickScript)
+                        $Form.Close()
+                        return
+                    }
+
+                    $NewSample = Get-CimInstance -ClassName Win32_PerfRawData_Tcpip_NetworkInterface
+                    
+                    $OldRx = ($Global:OldSample | Measure-Object -Property BytesReceivedPersec -Sum).Sum
+                    $OldTx = ($Global:OldSample | Measure-Object -Property BytesSentPersec -Sum).Sum
+                    $NewRx = ($NewSample | Measure-Object -Property BytesReceivedPersec -Sum).Sum
+                    $NewTx = ($NewSample | Measure-Object -Property BytesSentPersec -Sum).Sum
+
+                    $BytesReceived = $NewRx - $OldRx
+                    $BytesSent = $NewTx - $OldTx
+                    
+                    $LiveDl = [math]::Round(($BytesReceived * 8) / 1MB, 2)
+                    $LiveUl = [math]::Round(($BytesSent * 8) / 1MB, 2)
+
+                    if ($LiveDl -lt 0) { $LiveDl = 0 }
+                    if ($LiveUl -lt 0) { $LiveUl = 0 }
+
+                    $LblLiveStats.Text = "DL: $($LiveDl.ToString('0.00')) Mbps  |  UL: $($LiveUl.ToString('0.00')) Mbps"
+                    
+                    [void]$SeriesDL.Points.AddY($LiveDl)
+                    [void]$SeriesUL.Points.AddY($LiveUl)
+
+                    if ($SeriesDL.Points.Count -gt $MaxPoints) { $SeriesDL.Points.RemoveAt(0) }
+                    if ($SeriesUL.Points.Count -gt $MaxPoints) { $SeriesUL.Points.RemoveAt(0) }
+                    
+                    $Chart.ResetAutoValues()
+                    $Global:OldSample = $NewSample
+                } 
+                catch [System.Management.Automation.PipelineStoppedException] {
+                    $MonitorTimer.Stop()
+                }
+                catch {}
+            }
+
+            # Attach script block logic to the timer hook
+            $MonitorTimer.add_Tick($TickScript)
+
+            $Form.Add_FormClosing({
+                $MonitorTimer.Stop()
+                $MonitorTimer.remove_Tick($TickScript)
+                $MonitorTimer.Dispose()
+            })
+
+            $Global:NetSyncHash.IsInitialized = $true
+
+            $MonitorTimer.Start()
+            $Form.ShowDialog() | Out-Null
+        } 
+        catch [System.Management.Automation.PipelineStoppedException] {}
+        finally {
+            if ($CurrentRunspace) {
+                $CurrentRunspace.CloseAsync()
+            }
+        }
+    })
+
+    $Global:NetMonitorAsyncResult = $PowerShellInstance.BeginInvoke()
+}
+
+function Stop-NetworkMonitor {
+    <#
+    .SYNOPSIS
+        Signals the running loop to drop event blocks and close smoothly.
+    #>
+    if ($Global:NetMonitorRunspace -eq $null) {
+        Write-Warning "Network Monitor is not currently active."
+        return
+    }
+
+    Write-Host "Stopping Network Monitor..." -ForegroundColor Yellow
+
+    $RetryCount = 0
+    while (($Global:NetSyncHash -eq $null -or !$Global:NetSyncHash.IsInitialized) -and $RetryCount -lt 150) {
+        Write-Host "`rCount $RetryCount" -NoNewline
+        Start-Sleep -Milliseconds 200
+        $RetryCount++
+    }
+
+    if ($Global:NetSyncHash -and $Global:NetSyncHash.IsInitialized) {
+        $Global:NetSyncHash.CloseWindow = $true
+    }
+
+    # Allow time for background thread to run remove_Tick() and close the form natively
+    Start-Sleep -Milliseconds 2000
+
+    $Global:NetMonitorRunspace = $null
+    $Global:NetSyncHash = $null
+    $Global:NetMonitorAsyncResult = $null
+    
+    Write-Host "`nMonitor stopped successfully." -ForegroundColor Green
+}
+
 function User-Confirm
 {
 	param ([string]$msg)
-	do
-	{
-		$yn = Read-Host "$msg [y/n]";
-		if ($yn -eq 'n')
-		{
+
+    Write-Host "$msg [Y/N]: " -NoNewline
+
+    while ($true) {
+        # Capture a single keypress invisibly
+        $key = [Console]::ReadKey($true).KeyChar
+
+        # Process and exit the loop on a valid match
+        if ($key -match '^[Yy]$') {
+            Write-Host "Y" -ForegroundColor Green
+        	return $true
+        }
+        if ($key -match '^[Nn]$') {
+            Write-Host "N" -ForegroundColor Red
 			return $false
-		}
-		elseif ($yn -ne 'y')
-		{
-			echo "Enter y fer yes or n for no"
-		}
-	}
-	while($yn -ne "y")
-	return $true
+        }
+    }
 }
 
 <#
@@ -648,6 +903,142 @@ function Modio_mod_directory
     return $destination
 }
 
+<#
+    filebrowser_GUI -directoryPath  -guiTitle  -filter  -allowNoEntry
+#>
+
+function filebrowser_GUI
+{
+    param(
+        [string]$directoryPath,
+        [string]$guiTitle,
+        [string]$filter = "(*.*)|*.*"
+    )
+
+    Add-Type -AssemblyName System.Windows.Forms
+
+    # Fetch the working area of the primary display
+    $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+
+    # Output the width and height
+    $screenHeight = $workingArea.Height/2
+
+    # Create a hidden wrapper form set to center on the screen
+    $AnchorForm = New-Object System.Windows.Forms.Form
+    $AnchorForm.StartPosition = "CenterScreen"
+    $AnchorForm.Size = New-Object System.Drawing.Size(1024, $screenHeight)
+    $AnchorForm.FormBorderStyle = "None"
+    $AnchorForm.Opacity = 0
+    $AnchorForm.MaximizeBox = $false
+    $AnchorForm.MinimizeBox = $false
+    $AnchorForm.BackColor = [System.Drawing.Color]::FromArgb(248, 249, 250) # Dark Theme
+
+    # Display the dialog attached to the centered parent form
+    $AnchorForm.Add_Shown({
+        $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog
+        $FileBrowser.Title = $guiTitle
+        $FileBrowser.InitialDirectory = $directoryPath
+        $FileBrowser.Filter = $filter
+        $FileBrowser.FilterIndex = 1
+
+        $DialogResult = $FileBrowser.ShowDialog($AnchorForm)
+
+        if ($DialogResult -eq "OK") {
+            # Store selection in a global scope to access outside the event hook
+            $script:SelectedFile = $FileBrowser.FileName
+        }
+        else
+        {
+            $script:SelectedFile = $false
+        }
+        $AnchorForm.Close()
+    })
+
+    # Execute the form 
+    [void]$AnchorForm.ShowDialog()
+
+    # Cleanup
+    $AnchorForm.Dispose()
+    return $script:SelectedFile
+}
+
+
+function repair_globalsettings
+{
+    Clear-Host
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "      Repair globalsettings.json Location     " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
+
+    if (Test-Path $settingsPath) {
+        $globalsettings_old = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+        $globalSettingSource = $globalsettings_old.RootLocalStoragePath
+        $globalSettingSource = $globalSettingSource.Replace('/', '\')
+    }
+    else
+    {
+        Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
+        Write-Host ""
+        Pause
+        return
+    }
+    Write-Host "Current Mod Storage: $globalSettingSource" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "If your globalsettings.json Root Directory Path has been reset, corrupted or points to the wrong location you can change it back to where it is located."
+    Write-Host ""
+    Write-WrappedHost -Text "Select the directory path to where the state.json is located for the mod files you are wanting to import.  These files can be located on this server or any server accessable on your network." -ForegroundColor DarkYellow
+    Write-Host ""
+
+    $script:SelectedFile = filebrowser_GUI -directoryPath "C:\" -guiTitle "Select Path to state.json for importing" -filter "Insurgency Server state.json (state.json)|state.json"
+
+    if ($script:SelectedFile -ne $false) {
+        $SelectedFilePath = $script:SelectedFile
+        $Source_mods_Path = Split-Path -Path $SelectedFilePath -Parent
+        $Source_mods_Path = Split-Path -Path $Source_mods_Path -Parent
+        $Source_mods_Path = Split-Path -Path $Source_mods_Path -Parent
+
+        Write-Host "Directory path to state.json: $Source_mods_Path" -ForegroundColor Yellow
+        Write-Host ""
+    } else {
+        Write-Host "Operation cancelled by user." -ForegroundColor Yellow
+        Write-Host "`nPress any key to Continue..." -ForegroundColor White
+        $null = [System.Console]::ReadKey($true)
+        return
+    }
+
+    $response = User-Confirm "Would you like to use this state.json Mod.io location?"
+       
+    if ($response -eq 'n') {
+        return
+    }
+
+    $newStatejsonPath = Join-Path -Path $Source_mods_Path -ChildPath "254\metadata\state.json"
+    $modsLocation = Join-Path -Path $Source_mods_Path -ChildPath "254\mods"
+          
+    # Load and convert JSON to a PowerShell object
+    $state = Get-Content -Path $newStatejsonPath -Raw | ConvertFrom-Json
+
+    # Loop through the Mods array and change the path
+    $state.Mods | ForEach-Object {
+        # Replace the path with the C: drive (adjust folder structure as needed)
+        $_.PSObject.Properties['PathOnDisk'].Value = -join ("$modsLocation", "\") + ($_.PSObject.Properties['PathOnDisk'].Value | Split-Path -Leaf)
+    }
+
+    # Convert your object to JSON
+    $jsonc = $state | ConvertTo-Json -Compress -Depth 100
+                          
+    # Fix ONLY Unicode characters (e.g., \u0027) while keeping literal \n untouched
+    $cleanJson = [regex]::Replace($jsonc, '\\u([0-9a-fA-F]{4})', { 
+        param($match) [char][int]"0x$($match.Groups[1].Value)" 
+    })
+
+    # Export to a valid UTF-8 file
+    $cleanJson | Out-File "$newStatejsonPath" -Encoding utf8
+}
+
 function move_Sandstorm_mods
 {
     Clear-Host
@@ -696,15 +1087,14 @@ function move_Sandstorm_mods
         $globalsettings | ConvertTo-Json | Set-Content "$settingsPath"
         Write-Host ""
         Write-Host "Saved $settingsPath RootLocalStoragePath = $rootdestination"
-
-        $modsStoredPath = $stateJSON_Path -replace "metadata*"
-
         Write-Host ""
         Write-Host "Source Directory path: $globalSettingSource" -ForegroundColor Yellow
         Write-Host "Destination Directory path: $rootdestination" -ForegroundColor Yellow
 
+        $safeSource = $globalSettingSource.TrimEnd('\')
+        $safeDest   = $rootdestination.TrimEnd('\')
         #copy cache, metadata and mods directory    
-        robocopy "$globalSettingSource" "$rootdestination" /MOVE /E
+        robocopy "$safeSource" "$safeDest" /MOVE /E
                         
         $newStatejsonPath = "$destination254\metadata\state.json"
         $newModsPath = "$destination254\mods"
@@ -742,6 +1132,8 @@ function Process-Subscriptions
     echo "       Downloading your Subscriptions         "
     echo "=============================================="
     echo ""
+
+    $isNetworkMonitor = $false
 
     if (Test-Path ModList.json)
     {
@@ -972,14 +1364,99 @@ function Process-Subscriptions
 
            	if ($update)
    	        {
+                if(-not $isNetworkMonitor)
+                {
+                    Start-NetworkMonitor
+                    $isNetworkMonitor = $true
+                }
+
        	        Write-Host "  Downloading $subname - $directory_ID - $modFilename - $modFilesize MB" -ForegroundColor Yellow
    		        echo ""
 
-                # Track the precise download duration 
-                $elapsedTime = Measure-Command {
-                    $webClient = New-Object System.Net.WebClient
-                    $webClient.DownloadFile($modURL, "zip\$modFilename")
-                }
+            # Track the precise download duration 
+<#            $elapsedTime = Measure-Command {
+#                $webClient = New-Object System.Net.WebClient
+#                $webClient.DownloadFile($modURL, "zip\$modFilename")
+
+                $ProgressPreference = 'SilentlyContinue'
+                Invoke-WebRequest -Uri $modURL -OutFile "zip\$modFilename" -TimeoutSec 30 -UseBasicParsing
+                $ProgressPreference = 'Continue'
+            }
+#>
+
+# Explicitly load the missing HTTP assembly into the current session
+Add-Type -AssemblyName System.Net.Http
+
+# Track the precise download duration 
+$elapsedTime = Measure-Command {
+    # Initialize the modern web client handler using the type accelerator
+    $httpClient = [System.Net.Http.HttpClient]::new()
+    
+    # Send request and pull the raw web data stream
+    $responseTask = $httpClient.GetAsync($modURL, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead)
+    $response = $responseTask.GetAwaiter().GetResult()
+    
+    # Get true file size from headers (fallback to 0 if hidden)
+    $totalBytes = if ($response.Content.Headers.ContentLength) { $response.Content.Headers.ContentLength } else { 0 }
+    $totalMb = $totalBytes / 1MB
+
+    $responseStreamTask = $response.Content.ReadAsStreamAsync()
+    $responseStream = $responseStreamTask.GetAwaiter().GetResult()
+
+    # Ensure the target directory exists before creating the file
+    if (-not (Test-Path "zip")) { New-Item -ItemType Directory -Path "zip" -Force | Out-Null }
+    
+    # Create local zip destination file payload layout
+    $fileStream = [System.IO.File]::Create("zip\$modFilename")
+
+    # Set a 64KB transit memory buffer block size
+    $buffer = New-Object Byte[] 65536
+    $bytesReceived = 0
+
+    # Start a high-precision stopwatch to track live speed and ETA
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    # Actively copy chunks to disk and calculate numbers raw
+    while (($bytesRead = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) { $fileStream.Write($buffer, 0,$bytesRead)
+        $bytesReceived += $bytesRead
+        
+        $mbReceived = $bytesReceived / 1MB
+        $elapsedSec = $stopwatch.Elapsed.TotalSeconds
+
+        if ($totalBytes -gt 0) { $percent = ($bytesReceived / $totalBytes) * 100
+            
+            # Calculate live speed and estimated time remaining
+            if ($elapsedSec -gt 0.1) { 
+                $bytesPerSec = $bytesReceived / $elapsedSec
+                $bytesRemaining = $totalBytes - $bytesReceived 
+                $secondsLeft = [Math]::Max(0, ($bytesRemaining / $bytesPerSec))
+                
+                # Format time cleanly as MM:SS
+                $etaTime = [TimeSpan]::FromSeconds($secondsLeft)
+                $etaString = "{0:D2}m:{1:D2}s" -f $etaTime.Minutes, $etaTime.Seconds
+            } else {
+                $etaString = "--m:--s"
+            }
+
+            Write-Host ("`r  Downloaded: {0:N2} MB of {1:N2} MB ({2:N2}%) | ETA: {3}" -f $mbReceived, $totalMb, $percent, $etaString) -NoNewline
+        } else {
+            # Fallback layout if the web server hides the file size header
+            Write-Host ("`r  Downloaded: {0:N2} MB (Total size unknown)" -f $mbReceived) -NoNewline
+        }
+    }
+
+    # Clean up file handlers cleanly
+    $stopwatch.Stop()
+    $fileStream.Close()
+    $fileStream.Dispose()
+    $responseStream.Close()
+    $responseStream.Dispose()
+    $httpClient.Dispose()
+    
+    Write-Host "" # Break line safely on finish
+    Write-Host "" # Break line safely on finish
+}
+
 
                 # Calculate file size and download metrics
                 $fileSizeInBytes = (Get-Item "zip\$modFilename").Length
@@ -1174,6 +1651,11 @@ function Process-Subscriptions
     echo "=============================================="
     echo ""
 
+    if($isNetworkMonitor)
+    {
+        Stop-NetworkMonitor
+        $isNetworkMonitor = $false
+    }
 }
 
 function Show-Menu {
@@ -1219,7 +1701,9 @@ function Show-Menu {
     }
     Write-Host "       Current Mod Storage: $globalSettingSource" -ForegroundColor Green
     Write-Host ""
-    Write-Host "    6. Exit"
+    Write-Host "    6. Repair Mod.io globalsettings.json RootLocalStoragePath Location"
+    Write-Host ""
+    Write-Host "    7. Exit"
     Write-Host ""
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
@@ -1302,7 +1786,7 @@ $ModStorageSize = "{0:N2} GB" -f ((Get-ChildItem -Path "$modsDirectoryPath" -Rec
 
 do {
     Show-Menu
-    $selectionCount = 6
+    $selectionCount = 7
     $selection = Read-Host -Prompt "Please enter your selection (1-$selectionCount)"
     
     switch ($selection) {
@@ -1328,6 +1812,9 @@ do {
             move_Sandstorm_mods
         }
         '6' {
+            repair_globalsettings
+        }
+        '7' {
             Write-Host "`nExiting the script. Goodbye!" -ForegroundColor Yellow
             Start-Sleep -Seconds 1
             Exit
