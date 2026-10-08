@@ -1,7 +1,11 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.2.5
-### Date: 2026-08-05
+### Version: 1.4.0
+### Date: 2026-10-07
+
+[![Watch the Sandstorm Mod Manager Demonstration Video](https://youtu.be/N59Fhv_-2Ks)](https://youtu.be/N59Fhv_-2Ks)
+
+[![Joanna Wick's Sandstorm Website](http://sandstorm.dworks.work)](https://sandstorm.dworks.work)
 
 ## YOU should Double-Click on Start_Sandstorm_Mod_Manager.bat to execute the program.
 
@@ -75,6 +79,20 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+1.4.0 (2026-10-07)
+
+    1. [FIXED] Issues with Windows 11 window positioning and resize
+    2. [FIXED] Sometimes mod.io directory path could get corrupted
+    3. [ADDED] When launching for the first time as Administrator all files should be unblocked
+               You should only be asked ONCE if you would like to run this script.
+    4. [ADDED] Network Activity Graph will open and display Download and Upload speeds
+    5. [ADDED] When files are downloaded a Real Time Text Download Progress will display
+               showing MB Downloaded, % Downloaded and ETA
+    6. [ADDED] Mod.io Storage Path Repair option.  If the storage path resets to
+               C:\Users\Public\Mod.io you can use this option to restore the correct
+               storage path.
+    7. [MISC}  Minor cosmetic and logic fixes.
 
 1.2.5 (2026-08-05)
 
