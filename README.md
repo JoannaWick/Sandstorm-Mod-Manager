@@ -3,13 +3,13 @@
 ### Version: 1.4.0
 ### Date: 2026-10-07
 
+You can Ctrl+Click or Cmd+Click to open video in a new tab
+
 Watch the Sandstorm Mod Manager Demonstration Video (Click Image to view)
-*(Ctrl+Click or Cmd+Click to open video in a new tab)*
 
 [![Watch the Sandstorm Player Boot Installation Video](https://img.youtube.com/vi/N59Fhv_-2Ks/0.jpg)](https://www.youtube.com/watch?v=N59Fhv_-2Ks)
 
 Joanna Wick's Sandstorm Website (Click image to go to website)
-*(Ctrl+Click or Cmd+Click to open video in a new tab)*
 
 [![Joanna Wick's Sandstorm Website](http://sandstorm.dworks.work/images/banner3.jpg)](https://sandstorm.dworks.work)
 
