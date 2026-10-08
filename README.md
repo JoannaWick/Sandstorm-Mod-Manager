@@ -209,6 +209,6 @@ To Do
 
     1. Add displaying of all Sandstorm Collections on Mod.io
     2. Add displaying contents of a selected Sandstorm Collection
-    3. Add Follwing and Unfollowing Collections
+    3. Add Following and Unfollowing Collections
 
 
