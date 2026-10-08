@@ -3,9 +3,13 @@
 ### Version: 1.4.0
 ### Date: 2026-10-07
 
-[![Watch the Sandstorm Mod Manager Demonstration Video](https://youtu.be/N59Fhv_-2Ks)](https://youtu.be/N59Fhv_-2Ks)
+Watch the Sandstorm Mod Manager Demonstration Video
 
-[![Joanna Wick's Sandstorm Website](http://sandstorm.dworks.work)](https://sandstorm.dworks.work)
+[![Watch the Sandstorm Player Boot Installation Video](https://img.youtube.com/vi/N59Fhv_-2Ks/0.jpg)](https://www.youtube.com/watch?v=N59Fhv_-2Ks)
+
+Joanna Wick's Sandstorm Website
+
+[![Joanna Wick's Sandstorm Website](http://sandstorm.dworks.work/images/banner3.jpg)](https://sandstorm.dworks.work)
 
 ## YOU should Double-Click on Start_Sandstorm_Mod_Manager.bat to execute the program.
 
