@@ -86,6 +86,15 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 Change Log
 ==========
 
+1.4.1 (2026-10-09)
+
+    1. [CHANGED] There is now a unified ModList.json that is used by both Sandstorm Player Boot and Sandstorm Mod Manager
+       This is stored in C:\Users\[ACCOUNTNAME]\appdata\local\JoannaWick\Sandstorm
+       This way when either Sandstorm Player Boot or Mod Manager updates mods the other program will know what was updated.
+    2. [FIXED] If the Mods were moved to a new location and then immediately after a Process Mod Subscriptions was
+       performed the script would start downloading all mods to the previous location.  This would not happen if the
+       script was exited and restarted.
+
 1.4.0 (2026-10-07)
 
     1. [FIXED] Issues with Windows 11 window positioning and resize
