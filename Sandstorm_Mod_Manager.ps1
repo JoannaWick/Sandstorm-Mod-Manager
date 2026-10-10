@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.4.0
+.VERSION 1.4.1
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -9,7 +9,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "1.4.0" 
+$Version = "1.4.1" 
 
 <# 
     Resize and center window
@@ -107,38 +107,8 @@ else
     exit
 }
 
-# Create Backup of globalsettings.json
-
-$backupsettingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.backup"
-
-if(-not(Test-Path "$backupsettingsPath"))
-{
-    Copy-Item -Path "$env:LOCALAPPDATA\mod.io\globalsettings.json" -Destination "$env:LOCALAPPDATA\mod.io\globalsettings.backup"
-}
-
-# Restore backup if json contents different
-
-$targetFile = "$env:LOCALAPPDATA\mod.io\globalsettings.json"
-$backupFile = "$env:LOCALAPPDATA\mod.io\globalsettings.backup"
-
-# Load JSON content
-$Settings_Json = Get-Content -Raw -Path $targetFile | ConvertFrom-Json
-$Backup_Json = Get-Content -Raw -Path $backupFile | ConvertFrom-Json
-
-# Compare paths (case-insensitive for directory paths)
-#if ($Settings_Json.RootLocalStoragePath -ne $Backup_Json.RootLocalStoragePath) {
-#    Write-Host "Mismatch found! Restoring backup..." -ForegroundColor Yellow
-    
-#    # Overwrite the active file with the backup
-#    Copy-Item -Path $backupFile -Destination $targetFile -Force
-    
-#    Write-Host "Restore complete." -ForegroundColor Green
-#    pause
-#}
-
 $destination=$StoragePath.RootLocalStoragePath
 $destination=$destination.Replace('/', '\')
-$destination_Store=$destination
 $verbose = 0
 $global:forced_updates = 0
 
@@ -584,11 +554,11 @@ function Mod-Reset
     echo "=============================================="
     echo ""
 
-    if (Test-Path ModList.json)
+    if (Test-Path $ModListJsonPath)
     {
 	    echo "Reading settings from ModList.json."
         echo ""
-	    $ModListData=Get-Content ModList.json | ConvertFrom-Json
+	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
     }
     else
     {
@@ -663,7 +633,7 @@ function Mod-Reset
         }
 
         # Update ModList.json 
-        $ModListData | ConvertTo-Json | Set-Content ModList.json
+        $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
         $global:forced_updates=1
 
         return
@@ -684,11 +654,11 @@ function Mod-Unsub
     $apiUrl = "https://api.mod.io/v1"
     $destinationMods="$destination"+"254\mods\"
 
-    if (Test-Path ModList.json)
+    if (Test-Path $ModListJsonPath)
     {
 	    echo "Reading settings from ModList.json."
         echo ""
-	    $ModListData=Get-Content ModList.json | ConvertFrom-Json
+	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
     }
     else
     {
@@ -855,7 +825,7 @@ function Mod-Unsub
         }
 
         # Update ModList.json 
-        $ModListData | ConvertTo-Json | Set-Content ModList.json
+        $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
 
         echo ""
         echo "=============================================="
@@ -1061,6 +1031,7 @@ function move_Sandstorm_mods
         Pause
         return
     }
+
     Write-Host "Current Mod Storage: $globalSettingSource" -ForegroundColor Green
     Write-Host ""
     Write-WrappedHost -Text "Select the directory path to store Mod.io mod downloads. If no directory path selected they will be stored in C:\Users\Public\mod.io.$Base_Server_ID" -ForegroundColor DarkYellow
@@ -1135,12 +1106,27 @@ function Process-Subscriptions
 
     $isNetworkMonitor = $false
 
-    if (Test-Path ModList.json)
+    if (Test-Path $ModListJsonPath)
     {
 	    echo "Reading settings from ModList.json."
         echo ""
-	    $ModListData=Get-Content ModList.json | ConvertFrom-Json
+	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
     }
+
+    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
+
+    if (Test-Path $settingsPath) {
+        $StoragePath = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+    }
+    else
+    {
+        Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
+        pause
+        exit
+    }
+
+    $destination=$StoragePath.RootLocalStoragePath
+    $destination=$destination.Replace('/', '\')
 
     if(-not(Test-Path "$destination"))
     {
@@ -1643,7 +1629,7 @@ $elapsedTime = Measure-Command {
     }
 
     # Update ModList.json 
-    $ModListData | ConvertTo-Json | Set-Content ModList.json
+    $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
 
     echo ""
     echo "=============================================="
@@ -1709,22 +1695,24 @@ function Show-Menu {
     Write-Host ""
 }
 
-if (-not(Test-Path ModList.json))
+$ModListJsonPath = Join-Path -Path "$env:LOCALAPPDATA" -ChildPath "JoannaWick\Sandstorm\ModList.json"
+
+if (-not(Test-Path $ModListJsonPath))
 {
-    if((User-Confirm "Would you like to read the Sandstorm_Mod_Manager_Guide.pdf now?") -eq $true)
-    {
-        Start-Process "Sandstorm_Mod_Manager_Guide.pdf"
-        pause
+    $ParentDirectory = Split-Path -Path $ModListJsonPath -Parent
+
+    if (-not (Test-Path -Path $ParentDirectory)) {
+        $null = New-Item -Path $ParentDirectory -ItemType Directory -Force
     }
 
 	$ModListData=@{}
     # Write initial ModList.json file
     # (so that the user doesn't have to go trough the setup again if the script doesn't run completely)
-    $ModListData | ConvertTo-Json | Set-Content ModList.json
+    $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
 
     $Subscription_Count = 0
     # Scan state.json building initial ModList.json so mods not downloaded on first run.
-    $ModListData=Get-Content ModList.json | ConvertFrom-Json
+    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
     # Loop through the Mods array and change the path
     $getstatejson.Mods | ForEach-Object {
         # Replace the path with the C: drive (adjust folder structure as needed)
@@ -1739,7 +1727,7 @@ if (-not(Test-Path ModList.json))
         $Subscription_Count+=1
     }
 
-    $ModListData | ConvertTo-Json | Set-Content ModList.json
+    $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
 }
 
 $Subscription_Count = 0
