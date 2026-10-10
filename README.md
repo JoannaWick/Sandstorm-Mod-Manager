@@ -1,7 +1,7 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.4.0
-### Date: 2026-10-07
+### Version: 1.4.1
+### Date: 2026-10-09
 
 You can Ctrl+Click or Cmd+Click to open video in a new tab
 
