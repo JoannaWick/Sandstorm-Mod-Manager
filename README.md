@@ -86,6 +86,11 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 Change Log
 ==========
 
+1.4.2 (2026-10-13)
+
+    1. [CHANGED] The GUI for Forced Download and Unsubscribing Mods no longer auto selects the first entry.
+       No entries will be auto selected and click on OK when no entries select is like clicking on CANCEL.
+
 1.4.1 (2026-10-09)
 
     1. [CHANGED] There is now a unified ModList.json that is used by both Sandstorm Player Boot and Sandstorm Mod Manager
