@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.4.1
+.VERSION 1.4.2
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -9,7 +9,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "1.4.1" 
+$Version = "1.4.2" 
 
 <# 
     Resize and center window
@@ -522,6 +522,12 @@ Function mod_GUI_selector
     $Form.AcceptButton = $OKButton
     $Form.CancelButton = $CancelButton
 
+    # --- FIX: CLEAR AUTO-SELECTION ON LOAD ---
+    # This runs exactly when the window visualizes, stripping the default auto-focus highlight.
+    $Form.Add_Load({
+        $DataGridView.ClearSelection()
+    })
+
     # Show the window dialog and capture the result
     $Result = $Form.ShowDialog()
 
@@ -533,7 +539,9 @@ Function mod_GUI_selector
         }
     
         # Reverse the collection so output matches the top-to-bottom visual order selected
-        [array]::Reverse($SelectedMods)
+        if ($null -ne $SelectedMods) {
+            [array]::Reverse($SelectedMods)
+        }
     } else {
         $SelectedMods = $null
     }
@@ -543,6 +551,7 @@ Function mod_GUI_selector
 
     return $SelectedMods
 }
+
 
 # Display GUI Selector of all subscribed mods and ask user to
 # select any number of the mods to force a download and update
