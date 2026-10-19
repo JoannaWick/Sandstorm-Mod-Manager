@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.4.2
+.VERSION 1.5.0
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -9,7 +9,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "1.4.2" 
+$Version = "1.5.0" 
 
 <# 
     Resize and center window
@@ -1382,76 +1382,85 @@ function Process-Subscriptions
 # Explicitly load the missing HTTP assembly into the current session
 Add-Type -AssemblyName System.Net.Http
 
-# Track the precise download duration 
 $elapsedTime = Measure-Command {
     # Initialize the modern web client handler using the type accelerator
     $httpClient = [System.Net.Http.HttpClient]::new()
     
-    # Send request and pull the raw web data stream
-    $responseTask = $httpClient.GetAsync($modURL, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead)
-    $response = $responseTask.GetAwaiter().GetResult()
-    
-    # Get true file size from headers (fallback to 0 if hidden)
-    $totalBytes = if ($response.Content.Headers.ContentLength) { $response.Content.Headers.ContentLength } else { 0 }
-    $totalMb = $totalBytes / 1MB
-
-    $responseStreamTask = $response.Content.ReadAsStreamAsync()
-    $responseStream = $responseStreamTask.GetAwaiter().GetResult()
-
-    # Ensure the target directory exists before creating the file
-    if (-not (Test-Path "zip")) { New-Item -ItemType Directory -Path "zip" -Force | Out-Null }
-    
-    # Create local zip destination file payload layout
-    $fileStream = [System.IO.File]::Create("zip\$modFilename")
-
-    # Set a 64KB transit memory buffer block size
-    $buffer = New-Object Byte[] 65536
-    $bytesReceived = 0
-
-    # Start a high-precision stopwatch to track live speed and ETA
-    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-    # Actively copy chunks to disk and calculate numbers raw
-    while (($bytesRead = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) { $fileStream.Write($buffer, 0,$bytesRead)
-        $bytesReceived += $bytesRead
+    try {
+        # Send request and pull the raw web data stream
+        $responseTask = ($httpClient.GetAsync($modURL, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead))
+        $response = $responseTask.GetAwaiter().GetResult()
         
-        $mbReceived = $bytesReceived / 1MB
-        $elapsedSec = $stopwatch.Elapsed.TotalSeconds
+        # Get true file size from headers (fallback to 0 if hidden)
+        $totalBytes = if ($response.Content.Headers.ContentLength) {$response.Content.Headers.ContentLength } else { 0 }
+        $totalMb = $totalBytes / 1MB
 
-        if ($totalBytes -gt 0) { $percent = ($bytesReceived / $totalBytes) * 100
+        $responseStreamTask = $response.Content.ReadAsStreamAsync()
+        $responseStream = $responseStreamTask.GetAwaiter().GetResult()
+
+        # Ensure \$modFilename isn't empty to prevent null file crashes
+        if ([string]::IsNullOrWhiteSpace($modFilename)) {
+            throw "The variable `$modFilename is empty. Cannot create a file with no name."
+        }
+
+        # Use an ABSOLUTE path for .NET compatibility
+        $targetFolder = Join-Path $PSScriptRoot "zip" 
+        if (-not (Test-Path $targetFolder)) { New-Item -ItemType Directory -Path $targetFolder -Force | Out-Null }
+        $absoluteFilePath = Join-Path $targetFolder $modFilename
+
+        # Create local zip destination file payload layout securely
+        $fileStream = [System.IO.File]::Create($absoluteFilePath)
+
+        # Set a 64KB transit memory buffer block size
+        $buffer = New-Object Byte[] 65536
+        $bytesReceived = 0
+
+        # Start a high-precision stopwatch to track live speed and ETA
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        # Actively copy chunks to disk and calculate numbers raw
+        while (($bytesRead = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {$fileStream.Write($buffer, 0,$bytesRead)
+            $bytesReceived += $bytesRead
             
-            # Calculate live speed and estimated time remaining
-            if ($elapsedSec -gt 0.1) { 
-                $bytesPerSec = $bytesReceived / $elapsedSec
-                $bytesRemaining = $totalBytes - $bytesReceived 
-                $secondsLeft = [Math]::Max(0, ($bytesRemaining / $bytesPerSec))
-                
-                # Format time cleanly as MM:SS
-                $etaTime = [TimeSpan]::FromSeconds($secondsLeft)
-                $etaString = "{0:D2}m:{1:D2}s" -f $etaTime.Minutes, $etaTime.Seconds
-            } else {
-                $etaString = "--m:--s"
-            }
+            $mbReceived = $bytesReceived / 1MB
+            $elapsedSec = $stopwatch.Elapsed.TotalSeconds
 
-            Write-Host ("`r  Downloaded: {0:N2} MB of {1:N2} MB ({2:N2}%) | ETA: {3}" -f $mbReceived, $totalMb, $percent, $etaString) -NoNewline
-        } else {
-            # Fallback layout if the web server hides the file size header
-            Write-Host ("`r  Downloaded: {0:N2} MB (Total size unknown)" -f $mbReceived) -NoNewline
+            if ($totalBytes -gt 0) {$percent = ($bytesReceived / $totalBytes) * 100
+                
+                # Calculate live speed and estimated time remaining
+                if ($elapsedSec -gt 0.1) {$bytesPerSec = $bytesReceived / $elapsedSec
+                    $bytesRemaining = $totalBytes - $bytesReceived
+                    $secondsLeft = [Math]::Max(0, ($bytesRemaining / $bytesPerSec))
+                    
+                    # Format time cleanly as MM:SS
+                    $etaTime = [TimeSpan]::FromSeconds($secondsLeft)
+                    $etaString = "{0:D2}m:{1:D2}s" -f $etaTime.Minutes, $etaTime.Seconds
+                } else {
+                    $etaString = "--m:--s"
+                }
+
+                Write-Host ("`r  Downloaded: {0:N2} MB of {1:N2} MB ({2:N2}%) | ETA: {3}" -f $mbReceived, $totalMb, $percent, $etaString) -NoNewline
+            } else {
+                # Fallback layout if the web server hides the file size header
+                Write-Host ("`r  Downloaded: {0:N2} MB (Total size unknown)" -f $mbReceived) -NoNewline
+            }
         }
     }
-
-    # Clean up file handlers cleanly
-    $stopwatch.Stop()
-    $fileStream.Close()
-    $fileStream.Dispose()
-    $responseStream.Close()
-    $responseStream.Dispose()
-    $httpClient.Dispose()
-    
-    Write-Host "" # Break line safely on finish
-    Write-Host "" # Break line safely on finish
+    catch {
+        # This catches errors that Measure-Command normally hides
+        Write-Error "A terminating error occurred: \$_"
+    }
+    finally {
+        # Clean up file handlers cleanly and reliably even if a crash happens
+        if ($null -ne $stopwatch) {$stopwatch.Stop() }
+        if ($null -ne $fileStream) { $fileStream.Close(); $fileStream.Dispose() }
+        if ($null -ne $responseStream) { $responseStream.Close(); $responseStream.Dispose() }
+        if ($null -ne $httpClient) { $httpClient.Dispose() }
+        
+        Write-Host "" # Break line safely on finish
+        Write-Host "" # Break line safely on finish
+    }
 }
-
 
                 # Calculate file size and download metrics
                 $fileSizeInBytes = (Get-Item "zip\$modFilename").Length
