@@ -1,7 +1,7 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.4.1
-### Date: 2026-10-09
+### Version: 1.5.0
+### Date: 2026-10-19
 
 You can Ctrl+Click or Cmd+Click to open video in a new tab
 
@@ -85,6 +85,11 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+1.5.0 (2026-10-19)
+
+    1. [CHANGED]  The Download Progress Code has been re-written.  Some people were experiencing 
+                  red errors being displayed slowing down downloads.  This should fix those errors.
 
 1.4.2 (2026-10-13)
 
