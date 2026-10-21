@@ -1,13 +1,13 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 1.5.0
-### Date: 2026-10-19
+### Version: 2.0.0
+### Date: 2026-10-21
 
 You can Ctrl+Click or Cmd+Click to open video in a new tab
 
 Watch the Sandstorm Mod Manager Demonstration Video (Click Image to view)
 
-[![Watch the Sandstorm Player Boot Installation Video](https://img.youtube.com/vi/N59Fhv_-2Ks/0.jpg)](https://www.youtube.com/watch?v=N59Fhv_-2Ks)
+[![Watch the Sandstorm Player Boot Installation Video](https://img.youtube.com/vi/mG_fqpqiRBY/0.jpg)]([https://www.youtube.com/watch?v=N59Fhv_-2Ks](https://www.youtube.com/watch?v=mG_fqpqiRBY))
 
 Joanna Wick's Sandstorm Website (Click image to go to website)
 
@@ -85,6 +85,17 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+2.0.0 (2026-10-21)
+
+    1. [ADDED] The Main menu is now an Interactive GUI where you just have to point and click on buttons to do everything.  The keyboard is no longer used.
+    2. [ADDED] YES\NO GUI instead of the keyboard input
+    3. [ADDED] Sandstorm Mod Manager Output Console opens on the right side of the Sandstorm Mod Manager.
+    4. [ADDED] Colors added to the Section Headers displayed in the Console window.
+    5. [ADDED] Verbose/Concise settings are now saved to a config file and no longer revert to Concise on start.  The script will use the saved setting.
+    6. [CHANGED] Directory/File GUI now points to "This PC"
+    7. [CGANGED] Directory/File GUI completely re-written.  No longer using the stock System Folder GUI but now a Custom GUI. 
+    8. [CHANGED] The Mod Selector GUI, File GUI and Folder GUI all open on the left side of the Sandstorm Mod Manager.
 
 1.5.0 (2026-10-19)
 
