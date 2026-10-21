@@ -1,5 +1,4 @@
-<#PSScriptInfo
-.VERSION 1.5.0
+﻿<#PSScriptInfo
 .AUTHOR Joanna Wick
 .TAGS Sandstorm, Mods
 .PROJECTURI https://github.com/JoannaWick/Sandstorm-Mod-Manager
@@ -9,7 +8,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "1.5.0" 
+$Version = "2.0.0" 
 
 <# 
     Resize and center window
@@ -23,12 +22,8 @@ if ($buildNumber -ge 22000) {
     Add-Type -AssemblyName System.Windows.Forms
     $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 
-    # Output the width and height
-    $targetWidth  = $workingArea.Width / 2
-    $targetHeight = $workingArea.Height
-
-    $posX = [math]::Round(($workingArea.Width - $targetWidth) / 2)
-    $posY = [math]::Round(($workingArea.Height - $targetHeight) / 2)
+    $posX = [math]::Round(($workingArea.Width + 500) / 2)
+    $posY = [math]::Round(($workingArea.Height - 740) / 2)
 
     # FIX: Define both MoveWindow AND GetForegroundWindow in a single C# block
 $Signature = @"
@@ -51,7 +46,7 @@ public class Win32 {
 
     if ($hWnd -ne [IntPtr]::Zero) {
         # Move and resize the current hosting cmd window frame instantly
-        [void][Win32]::MoveWindow($hWnd, $posX, $posY, $targetWidth, $targetHeight, $true)
+        [void][Win32]::MoveWindow($hWnd, $posX, $posY, 600, 740, $true)
     } else {
         # Fallback to standard Mode Con formatting if running classic Conhost
         mode con: cols=120 lines=40
@@ -64,8 +59,8 @@ public class Win32 {
     $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 
     # Output the width and height
-    $screenWidth  = ($workingArea.Width-1024)/2
-    $screenHeight = $workingArea.Height
+    $screenWidth  = ($workingArea.Width+500)/2
+    $screenHeight = ($workingArea.Height-740)/2
 
     # Definition for User32 MoveWindow
 $TypeDefinition = @"
@@ -90,10 +85,23 @@ public class Window {
         $hWnd = (Get-Process -Id $parentID).MainWindowHandle
     }
     # Move window to of screen + 2 pixels center horizontally and resize it (Width=1024, Height=max height - taskbar)
-    [void][Window]::MoveWindow($hWnd, $screenWidth, 2, 1024, $screenHeight, $true)
+    [void][Window]::MoveWindow($hWnd, $screenWidth, $screenHeight, 600, 740, $true)
 }
 
 Set-Location -Path $PSScriptRoot
+
+$ManagerConfigPath = Join-Path -Path $PSScriptRoot -ChildPath "config\ManagerConfig.json"
+if (-not(Test-Path $ManagerConfigPath))
+{
+    $global:ManagerConfig = @'
+{
+    "verbose":  0
+}
+'@ | ConvertFrom-Json
+    $global:ManagerConfig | ConvertTo-Json | Set-Content $ManagerConfigPath
+}
+
+$global:ManagerConfig=Get-Content $ManagerConfigPath -Raw | ConvertFrom-Json
 
 $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
 
@@ -109,7 +117,6 @@ else
 
 $destination=$StoragePath.RootLocalStoragePath
 $destination=$destination.Replace('/', '\')
-$verbose = 0
 $global:forced_updates = 0
 
 # Get Sandstorm OAuth Token and UserID
@@ -367,24 +374,67 @@ function Stop-NetworkMonitor {
 
 function User-Confirm
 {
-	param ([string]$msg)
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$title,
+        
+        [string]$infoMessage
+    )
 
-    Write-Host "$msg [Y/N]: " -NoNewline
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
 
-    while ($true) {
-        # Capture a single keypress invisibly
-        $key = [Console]::ReadKey($true).KeyChar
+    $Form = New-Object System.Windows.Forms.Form
+    $Form.Text = $title
+    $Form.Size = New-Object System.Drawing.Size(420,220)
+    $Form.StartPosition = "CenterScreen"
+    $Form.FormBorderStyle = "FixedDialog" 
+    $Form.MaximizeBox = $false
+    $Form.MinimizeBox = $false
+    $Form.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245) # Pure White Background
 
-        # Process and exit the loop on a valid match
-        if ($key -match '^[Yy]$') {
-            Write-Host "Y" -ForegroundColor Green
-        	return $true
+    $Label = New-Object System.Windows.Forms.Label
+    $Label.Text = $infoMessage
+    $Label.Location = New-Object System.Drawing.Point(25, 30)
+    $Label.Size = New-Object System.Drawing.Size(350, 60)
+    $Label.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Regular)
+    $Label.ForeColor = [System.Drawing.Color]::FromArgb(32, 32, 32) # Dark Charcoal (Easier on eyes than pure black)
+
+    $ButtonYes = New-Object System.Windows.Forms.Button
+    $ButtonYes.Text = "Yes"
+    $ButtonYes.Location = New-Object System.Drawing.Point(80, 115)
+    $ButtonYes.Size = New-Object System.Drawing.Size(110, 32)
+    $ButtonYes.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $ButtonYes.ForeColor = [System.Drawing.Color]::FromArgb(33, 37, 41)
+    $ButtonYes.BackColor = [System.Drawing.Color]::FromArgb(230, 244, 234)
+    $ButtonYes.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $ButtonYes.FlatAppearance.BorderSize = 1
+    $ButtonYes.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(200, 200, 200) # Soft Gray Border
+    $ButtonYes.DialogResult = [System.Windows.Forms.DialogResult]::Yes
+
+    $ButtonNo = New-Object System.Windows.Forms.Button
+    $ButtonNo.Text = "No"
+    $ButtonNo.Location = New-Object System.Drawing.Point(210, 115)
+    $ButtonNo.Size = New-Object System.Drawing.Size(110, 32)
+    $ButtonNo.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $ButtonNo.ForeColor = [System.Drawing.Color]::FromArgb(33, 37, 41)
+    $ButtonNo.BackColor = [System.Drawing.Color]::FromArgb(252, 232, 230)
+    $ButtonNo.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $ButtonNo.FlatAppearance.BorderSize = 1
+    $ButtonNo.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
+    $ButtonNo.DialogResult = [System.Windows.Forms.DialogResult]::No
+
+    $Form.Add_FormClosing({
+        param($sender, $e)
+    
+        # Check if the close action was triggered by the user clicking the 'X' or Alt+F4
+        if ($e.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
+            $Form.DialogResult = [System.Windows.Forms.DialogResult]::No
         }
-        if ($key -match '^[Nn]$') {
-            Write-Host "N" -ForegroundColor Red
-			return $false
-        }
-    }
+    })
+
+    $Form.Controls.AddRange(@($Label, $ButtonYes, $ButtonNo))
+    return $Form.ShowDialog()
 }
 
 <#
@@ -410,7 +460,6 @@ function Write-WrappedHost {
 
     $spaceCount = $Text.Length - $Text.TrimStart().Length
     $currentLine = (" " * ($spaceCount/2))
-#    $currentLine = ""
 
     foreach ($word in $words) {
         # Test if adding the next word exceeds the window width
@@ -440,105 +489,86 @@ Function mod_GUI_selector
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
 
-    # Fetch the working area of the primary display
     $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 
-    # Output the width and height
-    $screenHeight = $workingArea.Height/2
+    $screenWidth  = ($workingArea.Width-1500)/2
+    $screenHeight = ($workingArea.Height-740)/2
 
-    # Create Form Layout
     $Form = New-Object System.Windows.Forms.Form
     $Form.Text = $GUItitle
-    $Form.Size = New-Object System.Drawing.Size(650, $screenHeight)
-    $Form.StartPosition = "CenterScreen"
+    $Form.Size = New-Object System.Drawing.Size(500, 740)
+    $Form.StartPosition = "Manual"
+    $Form.Location = New-Object System.Drawing.Point($screenWidth, $screenHeight)
 
-    # Create DataGridView
     $DataGridView = New-Object System.Windows.Forms.DataGridView
     $DataGridView.Dock = [System.Windows.Forms.DockStyle]::Fill
     $DataGridView.ReadOnly = $true
     $DataGridView.AllowUserToAddRows = $false
     $DataGridView.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
 
-    # --- KEY MULTI-SELECT SETTINGS ---
     $DataGridView.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
     $DataGridView.MultiSelect = $true  # Allows Ctrl+Click and Shift+Click selections
 
-    # Define Column Layout
     $Column = New-Object System.Windows.Forms.DataGridViewTextBoxColumn
     $Column.HeaderText = "Mod Name"
     $Column.Name = "ModName"
     [void]$DataGridView.Columns.Add($Column)
 
-    # Populating Rows
     foreach ($Mod in $ModList) {
         [void]$DataGridView.Rows.Add($Mod)
     }
 
-    # Create a Bottom Button Panel
     $ButtonPanel = New-Object System.Windows.Forms.Panel
     $ButtonPanel.Dock = [System.Windows.Forms.DockStyle]::Bottom
     $ButtonPanel.Height = 50
 
-    # Create Clear Button
     $ClearButton = New-Object System.Windows.Forms.Button
     $ClearButton.Text = "Clear All"
     $ClearButton.Location = New-Object System.Drawing.Point(35, 10)
     $ClearButton.Size = New-Object System.Drawing.Size(85, 30)
 
-    # Bind the Clear method to the button
     $ClearButton.Add_Click({
         $dataGridView.ClearSelection()
     })
 
-    # Create Select All Button
     $SelectAllButton = New-Object System.Windows.Forms.Button
     $SelectAllButton.Text = "Select All"
     $SelectAllButton.Location = New-Object System.Drawing.Point(135, 10)
     $SelectAllButton.Size = New-Object System.Drawing.Size(85, 30)
 
-    # Bind the SelectAll method to the button
     $SelectAllButton.Add_Click({
         $dataGridView.SelectAll()
     })
 
-    # Create OK Button
     $OKButton = New-Object System.Windows.Forms.Button
     $OKButton.Text = "OK"
     $OKButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    $OKButton.Location = New-Object System.Drawing.Point(410, 10)
+    $OKButton.Location = New-Object System.Drawing.Point(260, 10)
     $OKButton.Size = New-Object System.Drawing.Size(85, 30)
 
-    # Create Cancel Button
     $CancelButton = New-Object System.Windows.Forms.Button
     $CancelButton.Text = "Cancel"
     $CancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-    $CancelButton.Location = New-Object System.Drawing.Point(510, 10)
+    $CancelButton.Location = New-Object System.Drawing.Point(360, 10)
     $CancelButton.Size = New-Object System.Drawing.Size(85, 30)
 
-    # Attach buttons to the panel, and panel to the form
     $ButtonPanel.Controls.AddRange(@($OKButton, $CancelButton, $SelectAllButton, $ClearButton))
     $Form.Controls.Add($DataGridView)  # Added first so Dock.Fill respects the panel space
     $Form.Controls.Add($ButtonPanel)
     $Form.AcceptButton = $OKButton
     $Form.CancelButton = $CancelButton
 
-    # --- FIX: CLEAR AUTO-SELECTION ON LOAD ---
-    # This runs exactly when the window visualizes, stripping the default auto-focus highlight.
     $Form.Add_Load({
         $DataGridView.ClearSelection()
     })
 
-    # Show the window dialog and capture the result
     $Result = $Form.ShowDialog()
 
-    # Process Selected Rows if user clicked OK
     if ($Result -eq [System.Windows.Forms.DialogResult]::OK) {
-        # Extract the string cell value from each selected grid row
         $SelectedMods = foreach ($Row in $DataGridView.SelectedRows) {
             $Row.Cells["ModName"].Value
         }
     
-        # Reverse the collection so output matches the top-to-bottom visual order selected
         if ($null -ne $SelectedMods) {
             [array]::Reverse($SelectedMods)
         }
@@ -546,7 +576,6 @@ Function mod_GUI_selector
         $SelectedMods = $null
     }
 
-    # Clean up memory
     $Form.Dispose()
 
     return $SelectedMods
@@ -557,16 +586,17 @@ Function mod_GUI_selector
 # select any number of the mods to force a download and update
 function Mod-Reset
 {
-    echo ""
-    echo "=============================================="
-    echo "   Select Mods to FORCE Download and Update   "
-    echo "=============================================="
-    echo ""
+    Clear-Host
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "   Select Mods to FORCE Download and Update   " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
 
     if (Test-Path $ModListJsonPath)
     {
-	    echo "Reading settings from ModList.json."
-        echo ""
+	    Write-Host "Reading settings from ModList.json."
+        Write-Host ""
 	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
     }
     else
@@ -597,7 +627,7 @@ function Mod-Reset
                 }
             }
             # Standard property output
-            [void]$ModList.Add($modname+" | "+$topName + (' ' * 50)) # [void] suppresses the default .Add() output
+            [void]$ModList.Add($modname+" | "+$topName) # [void] suppresses the default .Add() output
         }
     }
 
@@ -615,18 +645,22 @@ function Mod-Reset
 
     # Output the selected items
     Write-Host "You selected the following items:" -ForegroundColor Green
-    $SelectedMods
-    echo ""
-
-    if(-not(User-Confirm "Last Chance: Do you really want to force an update for these items?"))
+    $tlen=$SelectedMods.count
+    if( $tlen -gt 1)
     {
-        $global:forced_updates=0
-
-        return
+        for ($t = 0; $t -lt $tlen; $t++) {
+            Write-Host $SelectedMods[$t]
+        }
     }
     else
     {
-        
+        Write-Host $SelectedMods
+    }
+    Write-Host ""
+
+    $UserChoice = User-Confirm -title "Forced Mod Update" -infoMessage "Last Chance: Do you really want to force an update for these items?"
+
+    if ($UserChoice -eq "Yes") {
         $tlen=$SelectedMods.count
         if( $tlen -gt 1)
         {
@@ -647,17 +681,24 @@ function Mod-Reset
 
         return
     }
+    else
+    {
+        Write-Host ""
+        Write-Host "Forced Mod Update Canceled" -ForegroundColor Yellow
+    }
+
 }
 
 # Display GUI Selector of all subscribed mods and ask user to
 # select any number of the mods to UNSUBSCRIBE and DELETE
 function Mod-Unsub
 {
-    echo ""
-    echo "=============================================="
-    echo "    Select Mods to Unsubscribe and Delete   "
-    echo "=============================================="
-    echo ""
+    Clear-Host
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "    Select Mods to Unsubscribe and Delete   " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
 
     $gameId = 254
     $apiUrl = "https://api.mod.io/v1"
@@ -665,8 +706,8 @@ function Mod-Unsub
 
     if (Test-Path $ModListJsonPath)
     {
-	    echo "Reading settings from ModList.json."
-        echo ""
+	    Write-Host "Reading settings from ModList.json."
+        Write-Host ""
 	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
     }
     else
@@ -703,7 +744,7 @@ function Mod-Unsub
                 }
             }
             # Standard property output
-            [void]$ModList.Add($modname+" | "+$topName + (' ' * 50)) # [void] suppresses the default .Add() output
+            [void]$ModList.Add($modname+" | "+$topName) # [void] suppresses the default .Add() output
         }
     }
 
@@ -720,17 +761,28 @@ function Mod-Unsub
 
     # Output the selected items
     Write-Host "You selected the following items:" -ForegroundColor Green
-    $SelectedMods
-    echo ""
-
-    if(-not(User-Confirm "Last Chance: Do you really want to Unsubscribe and Delete these items?"))
+    $tlen=$SelectedMods.count
+    if( $tlen -gt 1)
     {
-        return
+        for ($t = 0; $t -lt $tlen; $t++) {
+            Write-Host $SelectedMods[$t]
+        }
     }
     else
     {
-        
-        $tlen=$SelectedMods.count
+        Write-Host $SelectedMods
+    }
+    Write-Host ""
+
+    $UserChoice = User-Confirm -title "Mod Unsubscribe and Delete" -infoMessage "Last Chance: Do you really want to Unsubscribe and Delete these items?"
+
+    if ($UserChoice -eq "No") {
+        Write-Host "Mod Unsubscribe and Delete Canceled" -ForegroundColor Yellow
+    return
+    }
+    else
+    {
+       $tlen=$SelectedMods.count
         if( $tlen -gt 1)
         {
             for ($t = 0; $t -lt $tlen; $t++) {
@@ -836,110 +888,286 @@ function Mod-Unsub
         # Update ModList.json 
         $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
 
-        echo ""
-        echo "=============================================="
-        echo " Selected Mods have been Unsubscribed/Deleted    "
-        echo "=============================================="
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host " Selected Mods have been Unsubscribed/Deleted    " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
 
         return
     }
 }
 
-function Modio_mod_directory
-{
-	# Load the Windows Forms assembly quietly
-	Add-Type -AssemblyName System.Windows.Forms
+function Modio_mod_directory {
+    param(
+        [string]$Filter = "" # Example: "*.pak", "*.zip", or leave empty/blank for folders only
+    )
 
-    # Create a dummy form to act as the owner and force focus
-    $parentForm = New-Object System.Windows.Forms.Form -Property @{TopMost = $true}
-    $parentForm.TopLevel = $true
-    $parentForm.ShowInTaskbar = $false
+    [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+    [void][System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
 
-	# Create the folder browser dialog object
-	$FolderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
-
-   	# Set custom prompt description text
-    $FolderBrowser.Description = "Please select Directory to store Mod Files"
-
-	# Show the 'New Folder' button inside the GUI
-	$FolderBrowser.ShowNewFolderButton = $true
-
-	# Open the GUI dialog and check if the user clicked 'OK'
-	if ($FolderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) 
-    {
-       # Store the selected folder path in a variable
- 	    $destination = $FolderBrowser.SelectedPath
- 	    $destination = $destination.TrimEnd('\')
+    # --- WIN32 API DECLARATIONS FOR NATIVE ICON EXTRACTION ---
+    $IconApiDefinition = @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class Win32Icon {
+        [DllImport("shell32.dll", EntryPoint = "ExtractIconExW", CharSet = CharSet.Unicode)]
+        public static extern int ExtractIconEx(string lpszFile, int nIconIndex, out IntPtr phiconLarge, out IntPtr phiconSmall, int nIcons);
+        
+        [DllImport("user32.dll", EntryPoint = "DestroyIcon", SetLastError = true)]
+        public static extern bool DestroyIcon(IntPtr hIcon);
     }
-    else
-    {
-        $destination="C:\Users\Public"
+"@
+    if (-not ([System.Management.Automation.PSTypeName]'Win32Icon').Type) {
+        Add-Type -TypeDefinition $IconApiDefinition
     }
 
-    # Cleanup
-    $parentForm.Dispose()
-    $FolderBrowser.Dispose()
-    return $destination
+    # Helper function to pull system icons natively
+    Function Get-SystemIcon {
+        Param([string]$SourceFile, [int]$Index)
+        $phiconLarge = [IntPtr]::Zero
+        $phiconSmall = [IntPtr]::Zero
+        [void][Win32Icon]::ExtractIconEx($SourceFile, $Index, [ref]$phiconLarge, [ref]$phiconSmall, 1)
+        if ($phiconSmall -ne [IntPtr]::Zero) {
+            $Icon = [System.Drawing.Icon]::FromHandle($phiconSmall).Clone()
+            [void][Win32Icon]::DestroyIcon($phiconSmall)
+            if ($phiconLarge -ne [IntPtr]::Zero) { [void][Win32Icon]::DestroyIcon($phiconLarge) }
+            return $Icon
+        }
+        return $null
+    }
+
+    $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $formWidth   = 500
+    $formHeight  = 740
+    $screenWidth  = [int](($workingArea.Width - ($formWidth + 1000)) / 2)
+    $screenHeight = [int](($workingArea.Height - $formHeight) / 2)
+
+    # Main Window Canvas (Light Theme UI)
+    $Form = New-Object System.Windows.Forms.Form
+    $Form.Text = if ([string]::IsNullOrEmpty($Filter)) { "Select Folder to Move Mod Directory" } else { "Select $Filter" }
+    $Form.Size = New-Object System.Drawing.Size($formWidth, $formHeight)
+    $Form.BackColor = [System.Drawing.Color]::White
+    $Form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    $Form.Location = New-Object System.Drawing.Point($screenWidth, $screenHeight)
+
+    # Path Display Banner (Top Area)
+    $PathLabel = New-Object System.Windows.Forms.Label
+    $PathLabel.Text = "Current Folder: This PC"
+    $PathLabel.Location = New-Object System.Drawing.Point(15, 15)
+    $PathLabel.Size = New-Object System.Drawing.Size(450, 25)
+    $PathLabel.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+    $PathLabel.ForeColor = [System.Drawing.Color]::FromArgb(50, 50, 50)
+    [void]$Form.Controls.Add($PathLabel)
+
+    # --- SYSTEM ICON IMAGELIST SETUP ---
+    $ImageList = New-Object System.Windows.Forms.ImageList
+    $ImageList.ColorDepth = [System.Windows.Forms.ColorDepth]::Depth32Bit
+    $ImageList.ImageSize = New-Object System.Drawing.Size(16, 16)
+
+    # Map Windows resource indices into our library array
+    $SysDir = [System.Environment]::SystemDirectory
+    [void]$ImageList.Images.Add("Drive", (Get-SystemIcon "$SysDir\shell32.dll" 8))
+    [void]$ImageList.Images.Add("Folder", (Get-SystemIcon "$SysDir\shell32.dll" 3))
+    [void]$ImageList.Images.Add("HiddenFolder", (Get-SystemIcon "$SysDir\imageres.dll" 53)) 
+    [void]$ImageList.Images.Add("Up", (Get-SystemIcon "$SysDir\shell32.dll" 45))
+    [void]$ImageList.Images.Add("File", (Get-SystemIcon "$SysDir\shell32.dll" 0))
+
+    # Main Folder Display Grid (List View)
+    $ListView = New-Object System.Windows.Forms.ListView
+    $ListView.Location = New-Object System.Drawing.Point(15, 50)
+    $ListView.Size = New-Object System.Drawing.Size(450, 570)
+    $ListView.View = [System.Windows.Forms.View]::Details
+    $ListView.FullRowSelect = $true
+    $ListView.GridLines = $false
+    $ListView.SmallImageList = $ImageList 
+    $ListView.BackColor = [System.Drawing.Color]::FromArgb(252, 252, 252) 
+    $ListView.ForeColor = [System.Drawing.Color]::Black
+    $ListView.Font = New-Object System.Drawing.Font("Segoe UI", 14)
+
+    # Single column since we only focus on folder hierarchy
+    $titleName = if ([string]::IsNullOrEmpty($Filter)) { "Select Folder to Move Mod Directory" } else { "Select $Filter" }
+    [void]$ListView.Columns.Add($titleName, 430)
+    [void]$Form.Controls.Add($ListView)
+
+    # Action Buttons (Bottom Area)
+    $CancelButton = New-Object System.Windows.Forms.Button
+    $CancelButton.Text = "Cancel"
+    $CancelButton.Location = New-Object System.Drawing.Point(15, 640) 
+    $CancelButton.Size = New-Object System.Drawing.Size(100, 35)
+    $CancelButton.BackColor = [System.Drawing.Color]::FromArgb(250, 230, 230) 
+    $CancelButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $CancelButton.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    [void]$Form.Controls.Add($CancelButton)
+
+    $SelectButton = New-Object System.Windows.Forms.Button
+    $SelectButton.Text = if ([string]::IsNullOrEmpty($Filter)) { "Select Folder" } else { "Select File" }
+    $SelectButton.Location = New-Object System.Drawing.Point(290, 640) 
+    $SelectButton.Size = New-Object System.Drawing.Size(175, 35)
+    $SelectButton.BackColor = [System.Drawing.Color]::FromArgb(230, 242, 255) 
+    $SelectButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $SelectButton.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    [void]$Form.Controls.Add($SelectButton)
+
+    # Global tracking variables
+    $script:CurrentPath = "THIS_PC"
+    $script:FinalSelection = $false
+
+    # Function to safely pull directories, drives, or files
+    Function Update-FolderBrowser {
+        Param([string]$TargetDirectory)
+        
+        [void]$ListView.Items.Clear()
+        $script:CurrentPath = $TargetDirectory
+
+        # Default action button configuration based on active filters
+        if (-not [string]::IsNullOrEmpty($Filter)) {
+            $SelectButton.Enabled = $false # Lock down button globally until a matching file is highlighted
+        } else {
+            $SelectButton.Enabled = ($TargetDirectory -ne "THIS_PC") # Standard folder validation rules
+        }
+
+        # Scenario A: We are at the "This PC" root view
+        if ($TargetDirectory -eq "THIS_PC") {
+            $PathLabel.Text = "Current Folder: This PC"
+            
+            $Drives = [System.IO.DriveInfo]::GetDrives()
+            ForEach ($Drive in $Drives) {
+                $Label = if ($Drive.IsReady) { "$($Drive.Name) ($($Drive.VolumeLabel))" } else { "$($Drive.Name) (Drive not ready)" }
+                $Item = New-Object System.Windows.Forms.ListViewItem($Label)
+                $Item.Tag = @{ Path = $Drive.Name; IsDirectory = $true }
+                $Item.ImageKey = "Drive" 
+                [void]$ListView.Items.Add($Item)
+            }
+        } 
+        # Scenario B: We are inside a standard folder path
+        else {
+            $PathLabel.Text = "Current Folder: $TargetDirectory"
+            
+            # Add up-navigation link
+            $UpItem = New-Object System.Windows.Forms.ListViewItem(".. [Go Up to Parent Directory]")
+            $UpItem.Tag = @{ Action = if ($TargetDirectory.Length -le 3) { "GO_TO_THIS_PC" } else { "UP_DIR" } }
+            $UpItem.ImageKey = "Up"
+            $UpItem.ForeColor = [System.Drawing.Color]::Gray
+            [void]$ListView.Items.Add($UpItem)
+
+            Try {
+                # 1. Fetch Folders
+                $Dirs = Get-ChildItem -LiteralPath $TargetDirectory -Directory -Force -ErrorAction SilentlyContinue
+                ForEach ($Dir in $Dirs) {
+                    $IsHidden = $Dir.Attributes.HasFlag([System.IO.FileAttributes]::Hidden)
+                    $Item = New-Object System.Windows.Forms.ListViewItem($Dir.Name)
+                    $Item.Tag = @{ Path = $Dir.FullName; IsDirectory = $true }
+                    
+                    if ($IsHidden) {
+                        $Item.ImageKey = "HiddenFolder" 
+                        $Item.ForeColor = [System.Drawing.Color]::FromArgb(140, 140, 140)
+                    } else {
+                        $Item.ImageKey = "Folder" 
+                        $Item.ForeColor = [System.Drawing.Color]::Black
+                    }
+                    [void]$ListView.Items.Add($Item)
+                }
+
+                # 2. Fetch Files if a Filter argument is supplied
+                if (-not [string]::IsNullOrEmpty($Filter)) {
+                    $Files = Get-ChildItem -LiteralPath $TargetDirectory -File -Filter $Filter -Force -ErrorAction SilentlyContinue
+                    ForEach ($File in $Files) {
+                        $Item = New-Object System.Windows.Forms.ListViewItem($File.Name)
+                        $Item.Tag = @{ Path = $File.FullName; IsDirectory = $false }
+                        $Item.ImageKey = "File"
+                        $Item.ForeColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+                        [void]$ListView.Items.Add($Item)
+                    }
+                }
+            } Catch {
+                [void][System.Windows.Forms.MessageBox]::Show("Access Denied or Directory Unreadable.", "Permission Error")
+            }
+        }
+    }
+
+    # --- DYNAMIC SELECTION VALIDATION LATCH ---
+    # Monitors item clicks to lock or unlock the Select button instantly
+    $ListView.Add_SelectedIndexChanged({
+        if ($ListView.SelectedItems.Count -eq 1) {
+            $Target = $ListView.SelectedItems[0].Tag
+            
+            if (-not [string]::IsNullOrEmpty($Filter)) {
+                # If a filter is set, button ONLY unlocks when a non-directory file is highlighted
+                $SelectButton.Enabled = ($null -ne $Target -and $Target.IsDirectory -eq $false -and $null -ne $Target.Path)
+            } else {
+                # Standard folder rule: Can select anything except root structural system commands
+                $SelectButton.Enabled = ($null -ne $Target -and $null -ne $Target.Path)
+            }
+        } else {
+            # No item selected
+            if (-not [string]::IsNullOrEmpty($Filter)) {
+                $SelectButton.Enabled = $false
+            } else {
+                $SelectButton.Enabled = ($script:CurrentPath -ne "THIS_PC")
+            }
+        }
+    })
+
+    # Interactive Navigation Logic (Triggered on Double-Click)
+    $ListView.Add_DoubleClick({
+        if ($ListView.SelectedItems.Count -eq 1) {
+            $Target = $ListView.SelectedItems[0].Tag
+            if ($Target.Action -eq "GO_TO_THIS_PC") {
+                Update-FolderBrowser -TargetDirectory "THIS_PC"
+            }
+            elseif ($Target.Action -eq "UP_DIR") {
+                $ParentDir = Split-Path $script:CurrentPath -Parent
+                Update-FolderBrowser -TargetDirectory $ParentDir
+            }
+            elseif ($Target.IsDirectory) {
+                Update-FolderBrowser -TargetDirectory $Target.Path
+            }
+            else {
+                # If filter is passed, double-clicking a validated file exits and returns it
+                if (-not [string]::IsNullOrEmpty($Filter)) {
+                    $script:FinalSelection = $Target.Path
+                    $Form.Close()
+                }
+            }
+        }
+    })
+
+    # Button Commits
+    $SelectButton.Add_Click({
+        if ($ListView.SelectedItems.Count -eq 1) 
+        {
+            $Target = $ListView.SelectedItems[0].Tag
+            if ($Target.Path) 
+            {
+                # Strict verification guard check
+                if (-not [string]::IsNullOrEmpty($Filter) -and $Target.IsDirectory) { return }
+                $script:FinalSelection = $Target.Path
+                $Form.Close()
+            }
+        } else {
+            # Fall back to folder logic if no explicit item highlighted and no filter exists
+            if ([string]::IsNullOrEmpty($Filter) -and $script:CurrentPath -ne "THIS_PC") {
+                $script:FinalSelection = $script:CurrentPath
+                $Form.Close()
+            }
+        }
+    })
+
+    $CancelButton.Add_Click({
+        $script:FinalSelection = $false
+        $Form.Close()
+    })
+
+    # Kick off default layout population
+    Update-FolderBrowser -TargetDirectory "THIS_PC"
+    [void]$Form.ShowDialog()
+    $Form.Dispose()
+    return $script:FinalSelection
 }
 
 <#
     filebrowser_GUI -directoryPath  -guiTitle  -filter  -allowNoEntry
 #>
-
-function filebrowser_GUI
-{
-    param(
-        [string]$directoryPath,
-        [string]$guiTitle,
-        [string]$filter = "(*.*)|*.*"
-    )
-
-    Add-Type -AssemblyName System.Windows.Forms
-
-    # Fetch the working area of the primary display
-    $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-
-    # Output the width and height
-    $screenHeight = $workingArea.Height/2
-
-    # Create a hidden wrapper form set to center on the screen
-    $AnchorForm = New-Object System.Windows.Forms.Form
-    $AnchorForm.StartPosition = "CenterScreen"
-    $AnchorForm.Size = New-Object System.Drawing.Size(1024, $screenHeight)
-    $AnchorForm.FormBorderStyle = "None"
-    $AnchorForm.Opacity = 0
-    $AnchorForm.MaximizeBox = $false
-    $AnchorForm.MinimizeBox = $false
-    $AnchorForm.BackColor = [System.Drawing.Color]::FromArgb(248, 249, 250) # Dark Theme
-
-    # Display the dialog attached to the centered parent form
-    $AnchorForm.Add_Shown({
-        $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog
-        $FileBrowser.Title = $guiTitle
-        $FileBrowser.InitialDirectory = $directoryPath
-        $FileBrowser.Filter = $filter
-        $FileBrowser.FilterIndex = 1
-
-        $DialogResult = $FileBrowser.ShowDialog($AnchorForm)
-
-        if ($DialogResult -eq "OK") {
-            # Store selection in a global scope to access outside the event hook
-            $script:SelectedFile = $FileBrowser.FileName
-        }
-        else
-        {
-            $script:SelectedFile = $false
-        }
-        $AnchorForm.Close()
-    })
-
-    # Execute the form 
-    [void]$AnchorForm.ShowDialog()
-
-    # Cleanup
-    $AnchorForm.Dispose()
-    return $script:SelectedFile
-}
 
 
 function repair_globalsettings
@@ -961,7 +1189,6 @@ function repair_globalsettings
     {
         Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
         Write-Host ""
-        Pause
         return
     }
     Write-Host "Current Mod Storage: $globalSettingSource" -ForegroundColor Green
@@ -971,10 +1198,10 @@ function repair_globalsettings
     Write-WrappedHost -Text "Select the directory path to where the state.json is located for the mod files you are wanting to import.  These files can be located on this server or any server accessable on your network." -ForegroundColor DarkYellow
     Write-Host ""
 
-    $script:SelectedFile = filebrowser_GUI -directoryPath "C:\" -guiTitle "Select Path to state.json for importing" -filter "Insurgency Server state.json (state.json)|state.json"
+    Modio_mod_directory -filter "state.json"
 
-    if ($script:SelectedFile -ne $false) {
-        $SelectedFilePath = $script:SelectedFile
+    if ($script:FinalSelection -ne $false) {
+        $SelectedFilePath = $script:FinalSelection
         $Source_mods_Path = Split-Path -Path $SelectedFilePath -Parent
         $Source_mods_Path = Split-Path -Path $Source_mods_Path -Parent
         $Source_mods_Path = Split-Path -Path $Source_mods_Path -Parent
@@ -982,15 +1209,15 @@ function repair_globalsettings
         Write-Host "Directory path to state.json: $Source_mods_Path" -ForegroundColor Yellow
         Write-Host ""
     } else {
-        Write-Host "Operation cancelled by user." -ForegroundColor Yellow
-        Write-Host "`nPress any key to Continue..." -ForegroundColor White
-        $null = [System.Console]::ReadKey($true)
+        Write-Host "Repair Canceled" -ForegroundColor Yellow
         return
     }
 
-    $response = User-Confirm "Would you like to use this state.json Mod.io location?"
-       
-    if ($response -eq 'n') {
+    $UserChoice = User-Confirm -title "Pick state.json to Import" -infoMessage "Would you like to use this state.json Mod.io location?"
+
+    if ($UserChoice -eq 'No') {
+        Write-Host ""
+        Write-Host "globalsetting.json Repair Canceled" -ForegroundColor Yellow
         return
     }
 
@@ -1016,6 +1243,10 @@ function repair_globalsettings
 
     # Export to a valid UTF-8 file
     $cleanJson | Out-File "$newStatejsonPath" -Encoding utf8
+
+    & $UpdateUIData
+    Write-Host ""
+    Write-Host "State.json Repaired at location $script:FinalSelection" -ForegroundColor Green
 }
 
 function move_Sandstorm_mods
@@ -1037,20 +1268,31 @@ function move_Sandstorm_mods
     {
         Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
         Write-Host ""
-        Pause
         return
     }
 
     Write-Host "Current Mod Storage: $globalSettingSource" -ForegroundColor Green
     Write-Host ""
-    Write-WrappedHost -Text "Select the directory path to store Mod.io mod downloads. If no directory path selected they will be stored in C:\Users\Public\mod.io.$Base_Server_ID" -ForegroundColor DarkYellow
-
-    $destination = Modio_mod_directory
-
+    Write-WrappedHost -Text "Select the directory path to store Mod.io mod downloads. If no directory path selected move is aborted." -ForegroundColor DarkYellow
     Write-Host ""
 
-    if(-not(User-Confirm "Do you really want to move Mods to [$destination]?"))
+    Modio_mod_directory
+
+    if(-not $script:FinalSelection)
     {
+        Write-Host ""
+        Write-Host "Mod Move Aborted" -ForegroundColor Yellow
+        return
+    }
+
+    $destination = $script:FinalSelection
+
+    $UserChoice = User-Confirm -title "Select Directory/Folder you would like to move Mods" -infoMessage "Do you really want to move Mods to [$destination]?"
+
+    if ($UserChoice -eq 'No')
+    {
+        Write-Host ""
+        Write-Host "Mod Move Aborted" -ForegroundColor Yellow
         return
     }
     else
@@ -1074,8 +1316,9 @@ function move_Sandstorm_mods
         $safeSource = $globalSettingSource.TrimEnd('\')
         $safeDest   = $rootdestination.TrimEnd('\')
         #copy cache, metadata and mods directory    
-        robocopy "$safeSource" "$safeDest" /MOVE /E
-                        
+#        robocopy "$safeSource" "$safeDest" /MOVE /E | Out-Host
+        Start-Process -FilePath "robocopy.exe" -ArgumentList "`"$safeSource`"", "`"$safeDest`"", "/MOVE", "/E" -NoNewWindow -Wait
+                
         $newStatejsonPath = "$destination254\metadata\state.json"
         $newModsPath = "$destination254\mods"
                      
@@ -1101,24 +1344,28 @@ function move_Sandstorm_mods
 
         $cleanupPath = "$destination254\metadata"
         Get-ChildItem -Path "$cleanupPath" -File | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 | Remove-Item -Force
-        pause
+
+        & $UpdateUIData
+        Write-Host ""
+        Write-Host "Mods copied to location $script:FinalSelection" -ForegroundColor Green
     }
 }
 
 function Process-Subscriptions
 {
-    echo ""
-    echo "=============================================="
-    echo "       Downloading your Subscriptions         "
-    echo "=============================================="
-    echo ""
+    Clear-Host
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "       Downloading your Subscriptions         " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
 
     $isNetworkMonitor = $false
 
     if (Test-Path $ModListJsonPath)
     {
-	    echo "Reading settings from ModList.json."
-        echo ""
+	    Write-Host "Reading settings from ModList.json."
+        Write-Host ""
 	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
     }
 
@@ -1130,7 +1377,6 @@ function Process-Subscriptions
     else
     {
         Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
-        pause
         exit
     }
 
@@ -1217,8 +1463,8 @@ function Process-Subscriptions
         $plural=""
     }
     [string]$Page_Count=$PageCount
-    echo "Found $Page_Count Subscription Page$plural."
-    echo ""
+    Write-Host "Found $Page_Count Subscription Page$plural."
+    Write-Host ""
 
     [string]$resulttotal=$result_total
     if ($result_total -ne 1)
@@ -1229,8 +1475,8 @@ function Process-Subscriptions
     {
         $plural=""
     }
-    echo "Found $resulttotal Subscription$plural."
-    echo ""
+    Write-Host "Found $resulttotal Subscription$plural."
+    Write-Host ""
 
     for ($p = 0; $p -lt $PageCount; $p++)
     {
@@ -1240,7 +1486,7 @@ function Process-Subscriptions
 
         for ($i = 0; $i -lt $len; $i++)
         {
-            echo "=============================================="
+            Write-Host "==============================================" -ForegroundColor Cyan
 	        $sub=$workingHash.WorkArray[$p].data[$i]
 	        $subname=$sub.name
 
@@ -1299,12 +1545,12 @@ function Process-Subscriptions
             $jsonObject.Mods[$count_of_files]["State"]=1
             $jsonObject.Mods[$count_of_files].SubscriptionCount = @(55681422)
 
-            if($verbose -eq 1)
+            if($global:ManagerConfig.verbose -eq 1)
             {
-                echo ""
+                Write-Host ""
             }
             $count_of_files++
-            echo "Processing $count_of_files of $result_total Subscriptions : $subname"
+            Write-Host "Processing $count_of_files of $result_total Subscriptions : $subname"
 
         	[string]$modid=$sub.id
 	        [string]$modFilename=$sub.modfile.filename
@@ -1314,15 +1560,15 @@ function Process-Subscriptions
 	        [string]$modURL=$sub.modfile.download.binary_url
 	        [string]$modFilesize="{0:N2}" -f ($sub.modfile.filesize / 1MB)
 
-            if($verbose -eq 1)
+            if($global:ManagerConfig.verbose -eq 1)
             {
-                echo ""
-                echo "modid: $modid"
-                echo "modFilename: $modFilename"
-                echo "filesize: $modFilesize MB"
-                echo "moddate_added: $moddate_added_display"
-                echo "modVersion: $modVersion"
-                echo "modURL: $modURL"
+                Write-Host ""
+                Write-Host "modid: $modid"
+                Write-Host "modFilename: $modFilename"
+                Write-Host "filesize: $modFilesize MB"
+                Write-Host "moddate_added: $moddate_added_display"
+                Write-Host "modVersion: $modVersion"
+                Write-Host "modURL: $modURL"
             }
 
         	# Write data about this sub to ModListData
@@ -1342,9 +1588,9 @@ function Process-Subscriptions
 		        $ModListData.${modid}.date_added=$moddate_added
             }
 
-            if($verbose -eq 1)
+            if($global:ManagerConfig.verbose -eq 1)
             {
-                echo ""
+                Write-Host ""
             }
 
         	$file=$modFilename
@@ -1366,7 +1612,7 @@ function Process-Subscriptions
                 }
 
        	        Write-Host "  Downloading $subname - $directory_ID - $modFilename - $modFilesize MB" -ForegroundColor Yellow
-   		        echo ""
+   		        Write-Host ""
 
             # Track the precise download duration 
 <#            $elapsedTime = Measure-Command {
@@ -1477,25 +1723,57 @@ $elapsedTime = Measure-Command {
                 Write-Host "  Download complete!" -ForegroundColor Green
                 Write-Host "  Time Elapsed  : $([Math]::Round($totalSeconds, 2)) seconds" -ForegroundColor White
                 Write-Host "  Download Speed: $speedMbps Mbps" -ForegroundColor White
-   		        echo ""
+   		        Write-Host ""
 
                	Write-Host "  Unpacking $subname - $directory_ID - $modFilename" -ForegroundColor Cyan
 
-                .\bin\7za.exe x "zip\$modFilename" -o"$destinationMods$directory_ID" -aoa -y
-#               tar -xvf "zip\$modFilename" -C "$destinationMods$directory_ID"
-#               
-                if ($LASTEXITCODE -eq 0) {
+#                .\bin\7za.exe x "zip\$modFilename" -o"$destinationMods$directory_ID" -aoa -y
+                $7zArgs = @(
+                    "x",
+                    "zip\$modFilename",
+                    "-o$destinationMods$directory_ID",
+                    "-aoa",
+                    "-y"
+                )
+
+                $Process = Start-Process -FilePath ".\bin\7za.exe" -ArgumentList $7zArgs -NoNewWindow -Wait -PassThru
+                $ExitCode = $Process.ExitCode
+
+                if ($ExitCode -eq 0) {
                     Write-Host "Success: Archive extracted with no errors." -ForegroundColor Green
                     $error_success_msg += "Success: $subname - $directory_ID - $modFilename no errors."
                     $error_success++
-                } elseif ($LASTEXITCODE -eq 1) {
+                } elseif ($ExitCode -eq 1) {
                     $error_warning_msg += "Warning: Non-fatal error $subname - $directory_ID - $modFilename"
                     $error_warning++
                 } else {
                     $error_fatal_msg += "Failure: $subname - $directory_ID - $modFilename code $LASTEXITCODE."
                     $error_fatal++
                 }
-
+<#
+    switch ($ExitCode) {
+        0 { 
+            Write-Host "Success! Extraction completed with exit code 0." -ForegroundColor Green 
+        }
+        1 { 
+            Write-Host "Warning: Non-fatal error occurred (Exit Code 1)." -ForegroundColor Yellow 
+        }
+        2 { 
+            Write-Host "Fatal Error: Misuse, bad arguments, or unexpected crash (Exit Code 2)." -ForegroundColor Red 
+        }
+        7 { 
+            Write-Host "Error: Command line error / wrong syntax (Exit Code 7)." -ForegroundColor Red 
+        }
+        8 { 
+            Write-Host "Error: Not enough memory for operation (Exit Code 8)." -ForegroundColor Red 
+        }
+        255 { 
+            Write-Host "User Error: Process was stopped or interrupted by user (Exit Code 255)." -ForegroundColor Yellow 
+        }
+        Default { 
+            Write-Host "Extraction failed with unknown error code: $ExitCode" -ForegroundColor Red 
+        }
+#>
                 $dirSize = (Get-ChildItem "$destinationMods$directory_ID" -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
                 $totalMBdiskStorage += $dirSize
 
@@ -1553,41 +1831,41 @@ $elapsedTime = Measure-Command {
     Get-ChildItem -Path "$cleanupPath" -File | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 | Remove-Item -Force
 
     # Display Total DL Time, Total GB downloaded, Total Disk Space Used 
-    echo "=============================================="
-    echo ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
     $formattedTime = (New-TimeSpan -Seconds $totalTimeDownloading).ToString("mm\:ss")
     Write-Host "Total Download Time: $formattedTime" -ForegroundColor Cyan
     $diskStorageInGB = [Math]::Round(($totalMBdownloaded / 1GB), 2)
     Write-Host "Total Download Size: $diskStorageInGB GB" -ForegroundColor Green
     $diskStorageInGB = [Math]::Round(($totalMBdiskStorage / 1GB), 2)
     Write-Host "Total Disk Storage : $diskStorageInGB GB" -ForegroundColor Yellow
-    echo ""
+    Write-Host ""
 
     # Display Successful Downloaded and Installed message for each mod file
     if ($error_success -ne 0) {
-        echo "=============================================="
+        Write-Host "==============================================" -ForegroundColor Cyan
         Write-Host "Successfully Installed: $error_success file(s)" -ForegroundColor Green
-        echo ""
-        $error_success_msg | ForEach-Object { "$_" }
+        Write-Host ""
+        $error_success_msg | ForEach-Object { "$_" } | Out-Host
     }
 
     # Display WARNING about zip file for each mod
     if ($error_warning -ne 0) {
-        echo "=============================================="
+        Write-Host "==============================================" -ForegroundColor Cyan
         Write-Warning "Warning: $error_warning file(s)"
-        echo ""
-        $error_warning_msg | ForEach-Object { "$_" }
+        Write-Host ""
+        $error_warning_msg | ForEach-Object { "$_" } | Out-Host
     }
 
     # Display mod files that had errors while unzipping
     if ($error_fatal -ne 0) {
-        echo "=============================================="
-        echo "Error: $error_fatal file(s)"
-        echo ""
-        echo "If a CRC-ERROR files may have extracted without a problem."
-        echo "Scroll up to find the mod to verify."
-        echo ""
-        $error_fatal_msg | ForEach-Object { "$_" }
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "Error: $error_fatal file(s)"
+        Write-Host ""
+        Write-Host "If a CRC-ERROR files may have extracted without a problem."
+        Write-Host "Scroll up to find the mod to verify."
+        Write-Host ""
+        $error_fatal_msg | ForEach-Object { "$_" } | Out-Host
     }
 
     # If any mods are missing from the mod.io subscribed list
@@ -1597,11 +1875,11 @@ $elapsedTime = Measure-Command {
     # $ModListData_delete_comparison and remove directories of
     # missing mods.
 
-    echo ""
-    echo "=============================================="
-    echo "        Checking for Unsubscribed Mods        "
-    echo "=============================================="
-    echo ""
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "        Checking for Unsubscribed Mods        " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
 
     $deletedMods=0
 
@@ -1649,68 +1927,17 @@ $elapsedTime = Measure-Command {
     # Update ModList.json 
     $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
 
-    echo ""
-    echo "=============================================="
-    echo "      Sandstorm Mod File Update Complete      "
-    echo "=============================================="
-    echo ""
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "      Sandstorm Mod File Update Complete      " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
 
     if($isNetworkMonitor)
     {
         Stop-NetworkMonitor
         $isNetworkMonitor = $false
     }
-}
-
-function Show-Menu {
-    Clear-Host
-
-    if($verbose -eq 0)
-    {
-        $verboseText = "Concise"
-    }
-    else
-    {
-        $verboseText = "Verbose"
-    }
-
-    Write-Host ""
-    Write-Host "==============================================" -ForegroundColor Cyan
-    Write-Host "            Sandstorm Mod Manager             " -ForegroundColor Yellow
-    Write-Host "               Version: $Version                 " -ForegroundColor DarkYellow
-    Write-Host "==============================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "       $valid_Personal_Token" -ForegroundColor Green
-    Write-Host "       $valid_Personal_Username"
-    Write-Host "       $valid_Personal_UserID"
-    Write-Host "       Total Subscriptions: $Subscription_Count"
-    Write-Host "       Mod Storage: $ModStorageSize"
-    Write-Host ""
-    Write-Host "    1. Process Mod Subscriptions"
-    Write-Host ""
-    Write-Host "    2. Select Mods to FORCE Download and Update"
-    Write-Host ""
-    Write-Host "    3. Select Mods to Unsubscribe and Delete"
-    Write-Host ""
-    Write-Host "    4. Would you like to view Verbose Mod Information (not saved)"
-    Write-Host "       Current Setting: $verboseText" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "    5. Move Mod.io Mod Directory to new Location"
-    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
-
-    if (Test-Path $settingsPath) {
-        $globalsettings_old = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
-        $globalSettingSource = $globalsettings_old.RootLocalStoragePath
-        $globalSettingSource = $globalSettingSource.Replace('/', '\')
-    }
-    Write-Host "       Current Mod Storage: $globalSettingSource" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "    6. Repair Mod.io globalsettings.json RootLocalStoragePath Location"
-    Write-Host ""
-    Write-Host "    7. Exit"
-    Write-Host ""
-    Write-Host "==============================================" -ForegroundColor Cyan
-    Write-Host ""
 }
 
 $ModListJsonPath = Join-Path -Path "$env:LOCALAPPDATA" -ChildPath "JoannaWick\Sandstorm\ModList.json"
@@ -1785,16 +2012,178 @@ catch {
 
 $ModStorageSize = "{0:N2} GB" -f ((Get-ChildItem -Path "$modsDirectoryPath" -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1GB)
 
-do {
-    Show-Menu
-    $selectionCount = 7
-    $selection = Read-Host -Prompt "Please enter your selection (1-$selectionCount)"
+
+function Show-Menu-GUI {
+    # Ensure the .NET WinForms classes are loaded
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    # 1. Main Window Container (Light Theme)
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Sandstorm Mod Manager $Version"
+    $form.Size = New-Object System.Drawing.Size(500, 740)
+    $form.StartPosition = "CenterScreen"
+    $form.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245) # Soft white/light gray background
+    $form.FormBorderStyle = "FixedSingle"
+    $form.MaximizeBox = $false
+
+    # Universal Font Styles
+    $titleFont = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+    $headerFont = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+    $textFont = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $buttonFont = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+
+    # Color Palette
+    $darkText = [System.Drawing.Color]::FromArgb(40, 40, 40)
+    $mutedText = [System.Drawing.Color]::FromArgb(100, 100, 100)
+    $accentColor = [System.Drawing.Color]::FromArgb(0, 120, 215) # Slate blue accent
+    $buttonBg = [System.Drawing.Color]::FromArgb(255, 255, 255)  # Pure white buttons
+    $greenStatus = [System.Drawing.Color]::FromArgb(0, 150, 0)
+    $burntStatus = [System.Drawing.Color]::FromArgb(107, 76, 45)
+    $darkredStatus = [System.Drawing.Color]::FromArgb(150, 30, 30)
+
+    # 2. Header Panel
+    $titleLabel = New-Object System.Windows.Forms.Label
+    $titleLabel.Text = "Sandstorm Mod Manager"
+    $titleLabel.Font = $titleFont
+    $titleLabel.ForeColor = $darkText
+    $titleLabel.Location = New-Object System.Drawing.Point(20, 15)
+    $titleLabel.Size = New-Object System.Drawing.Size(440, 35)
+    $form.Controls.Add($titleLabel)
+
+    $versionLabel = New-Object System.Windows.Forms.Label
+    $versionLabel.Text = "Version: $Version"
+    $versionLabel.Font = $textFont
+    $versionLabel.ForeColor = $mutedText
+    $versionLabel.Location = New-Object System.Drawing.Point(22, 49)
+    $versionLabel.Size = New-Object System.Drawing.Size(440, 20)
+    $form.Controls.Add($versionLabel)
+
+    # Divider Line
+    $line = New-Object System.Windows.Forms.Label
+    $line.BackColor = $accentColor
+    $line.Location = New-Object System.Drawing.Point(20, 70)
+    $line.Size = New-Object System.Drawing.Size(440, 2)
+    $form.Controls.Add($line)
+
+    # 3. User Info / Stats Group Box
+    $statsBox = New-Object System.Windows.Forms.GroupBox
+    $statsBox.Text = " Account / Storage Status "
+    $statsBox.Font = $headerFont
+    $statsBox.ForeColor = $accentColor
+    $statsBox.Location = New-Object System.Drawing.Point(20, 85)
+    $statsBox.Size = New-Object System.Drawing.Size(440, 220)
+    $statsBox.BackColor = [System.Drawing.Color]::White
     
-    switch ($selection) {
-        '1' {
-            Process-Subscriptions
-        }
-        '2' {
+    if ($valid_Personal_Token -like "*Success*") {
+       $tokenStatus = $greenStatus
+    }
+    else
+    {
+       $tokenStatus = $darkredStatus
+    }
+
+    # Token & User Info inside the stats box
+    $infoText = "$valid_Personal_Token`n$valid_Personal_Username ($valid_Personal_UserID)"
+    $statsLabel1 = New-Object System.Windows.Forms.Label
+    $statsLabel1.Text = $infoText
+    $statsLabel1.Font = $textFont
+    $statsLabel1.ForeColor = $tokenStatus
+    $statsLabel1.Location = New-Object System.Drawing.Point(15, 25)
+    $statsLabel1.Size = New-Object System.Drawing.Size(410, 62)
+    $statsBox.Controls.Add($statsLabel1)
+
+    # Subscriptions & Directory Paths
+    if($global:ManagerConfig.verbose -eq 0) { $verboseText = "Concise" }else{ $verboseText = "Verbose" }
+    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
+
+    if (Test-Path $settingsPath) {
+        $globalsettings_old = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+        $globalSettingSource = $globalsettings_old.RootLocalStoragePath
+        $globalSettingSource = $globalSettingSource.Replace('/', '\')
+    }
+
+    $statsText2 = "Total Subscriptions: $Subscription_Count`nMod Storage Size: $ModStorageSize`n" +
+                  "Mod Storage Path: $globalSettingSource"
+    
+    $statsLabel2 = New-Object System.Windows.Forms.Label
+    $statsLabel2.Text = $statsText2
+    $statsLabel2.Font = $textFont
+    $statsLabel2.ForeColor = $burntStatus
+    $statsLabel2.Location = New-Object System.Drawing.Point(15, 90)
+    $statsLabel2.Size = New-Object System.Drawing.Size(410, 120)
+    $statsBox.Controls.Add($statsLabel2)
+    $form.Controls.Add($statsBox)
+
+    # 4. Action Buttons (Replacing CLI Number Choices)
+    $buttonWidth = 440
+    $buttonHeight = 40
+    $startY = 325
+    $spacing = 50
+
+$UpdateUIData = {
+    # 1. Evaluate the global state variable
+    if ($global:ManagerConfig.verbose -eq 0) {
+        $verboseText = "Concise" 
+    } else { 
+        $verboseText = "Verbose" 
+    }
+    
+    # 2. Grab the local path data
+    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
+
+    if (Test-Path $settingsPath) {
+        $globalsettings_old = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+        $globalSettingSource = $globalsettings_old.RootLocalStoragePath
+        $globalSettingSource = $globalSettingSource.Replace('/', '\')
+    }
+
+    # 3. DIRECTLY UPDATE THE LIVE UI LABELS (Crucial Step)
+    $statsText2 = "Total Subscriptions: $Subscription_Count`nMod Storage Size: $ModStorageSize`n" +
+                  "Mod Storage Path: $globalSettingSource"
+        $statsLabel2.Text = $statsText2
+
+    # 4. Update the toggle button text dynamically
+    if ($btn4) {
+        $btn4.Text = "Toggle Verbose Mod Information (Current: $verboseText)"
+    }
+}
+
+    # Helper function to generate standardized buttons quickly
+    function Create-MenuButton {
+        param(
+            [string]$text,
+            [int]$yLocation,
+            [scriptblock]$actionCode
+        )
+        $btn = New-Object System.Windows.Forms.Button
+        $btn.Text = $text
+        $btn.Font = $buttonFont
+        $btn.ForeColor = $darkText
+        $btn.BackColor = $buttonBg
+        $btn.Location = New-Object System.Drawing.Point(20, $yLocation)
+        $btn.Size = New-Object System.Drawing.Size($buttonWidth, $buttonHeight)
+        $btn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+        $btn.FlatAppearance.BorderColor = [System.Drawing.Color]::LightGray
+        $btn.Cursor = [System.Windows.Forms.Cursors]::Hand
+        
+        # 1. Store the script block directly inside the button object so it doesn't get lost
+        $btn | Add-Member -MemberType NoteProperty -Name "CustomAction" -Value $actionCode
+        
+        # 2. Reference the button object ($this) to call the stored action
+        $btn.Add_Click({
+            & $this.CustomAction # '$this' refers to the clicked button, pulling its own action safely
+            $form.Refresh() 
+        })
+        return $btn
+    }
+
+    # Register actions into their corresponding script blocks using named arguments
+    $btn1 = Create-MenuButton -text "Process Mod Subscriptions" -yLocation $startY -actionCode { 
+        Process-Subscriptions
+    }
+    
+    $btn2 = Create-MenuButton -text "FORCE Download and Update Specific Mods" -yLocation ($startY + $spacing) -actionCode {
             Mod-Reset
 
             if($global:forced_updates -eq 1)
@@ -1802,32 +2191,59 @@ do {
                 Process-Subscriptions
             }
             $global:forced_updates=0
-        }
-        '3' {
-            Mod-Unsub
-        }
-        '4' {
-            $verbose = 1 - $verbose
-        }
-        '5' {
-            move_Sandstorm_mods
-        }
-        '6' {
-            repair_globalsettings
-        }
-        '7' {
-            Write-Host "`nExiting the script. Goodbye!" -ForegroundColor Yellow
-            Start-Sleep -Seconds 1
-            Exit
-        }
-        default {
-            Write-Host "`nInvalid choice! Please select a number from 1 to $selectionCount." -ForegroundColor Red
-        }
-    }
-    
-    if ($selection -ne '4' -and $selection -ne '5') {
-        Write-Host "`nPress any key to return to the menu..." -ForegroundColor White
-        $null = [System.Console]::ReadKey($true)
     }
 
-} until ($selection -eq $selectionCount)
+    $btn3 = Create-MenuButton -text "Unsubscribe and Delete Specific Mods" -yLocation ($startY + ($spacing * 2)) -actionCode {
+            Mod-Unsub
+    }
+
+    $btn4 = Create-MenuButton -text "Toggle Verbose Mod Information (Current: $verboseText)" -yLocation ($startY + ($spacing * 3)) -actionCode {
+    if ($global:ManagerConfig.verbose -eq 0) { 
+        $global:ManagerConfig.verbose = 1 
+        $highLevelState = "Concise"
+    } else { 
+        $global:ManagerConfig.verbose = 0 
+        $highLevelState = "Verbose"
+    }
+    $global:ManagerConfig | ConvertTo-Json | Set-Content $ManagerConfigPath
+
+    # 2. Force the data engine to push new string layers to your form components
+    & $UpdateUIData
+        }
+
+    $btn5 = Create-MenuButton -text "Move Mod.io Mod Directory to New Location" -yLocation ($startY + ($spacing * 4)) -actionCode {
+            move_Sandstorm_mods
+    }
+
+    $btn6 = Create-MenuButton -text "Repair globalsettings.json Storage Location" -yLocation ($startY + ($spacing * 5)) -actionCode {
+            repair_globalsettings
+    }
+
+
+    # Exit Button (Styled with a distinct alert outline boundary tint if desired)
+    $btnExit = New-Object System.Windows.Forms.Button
+    $btnExit.Text = "Exit Manager"
+    $btnExit.Font = $buttonFont
+    $btnExit.ForeColor = [System.Drawing.Color]::DarkRed
+    $btnExit.BackColor = $buttonBg
+    $btnExit.Location = New-Object System.Drawing.Point(20, ($startY + ($spacing * 6) + 10))
+    $btnExit.Size = New-Object System.Drawing.Size($buttonWidth, $buttonHeight)
+    $btnExit.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnExit.FlatAppearance.BorderColor = [System.Drawing.Color]::RosyBrown
+    $btnExit.Add_Click({
+        $form.Close()
+    })
+
+    # Add all interactive layout blocks onto the GUI frame
+    $form.Controls.Add($btn1)
+    $form.Controls.Add($btn2)
+    $form.Controls.Add($btn3)
+    $form.Controls.Add($btn4)
+    $form.Controls.Add($btn5)
+    $form.Controls.Add($btn6)
+    $form.Controls.Add($btnExit)
+
+    # 5. Open Form Window Display Dialog
+    $form.ShowDialog() | Out-Null
+}
+Show-Menu-GUI

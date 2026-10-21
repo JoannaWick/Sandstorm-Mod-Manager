@@ -1,4 +1,7 @@
 @echo off
+
+title Sandstorm Mod Manager Console
+
 setlocal DisableDelayedExpansion
 
 rem Set up the configuration file path
