@@ -7,7 +7,7 @@ You can Ctrl+Click or Cmd+Click to open video in a new tab
 
 Watch the Sandstorm Mod Manager Demonstration Video (Click Image to view)
 
-[![Watch the Sandstorm Player Boot Installation Video](https://img.youtube.com/vi/mG_fqpqiRBY/0.jpg)]([https://www.youtube.com/watch?v=N59Fhv_-2Ks](https://www.youtube.com/watch?v=mG_fqpqiRBY))
+[![Watch the Sandstorm Player Boot Installation Video](https://img.youtube.com/vi/mG_fqpqiRBY/0.jpg)](https://www.youtube.com/watch?v=mG_fqpqiRBY)
 
 Joanna Wick's Sandstorm Website (Click image to go to website)
 
