@@ -8,7 +8,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "2.0.0" 
+$Version = "2.0.1" 
 
 <# 
     Resize and center window
@@ -164,212 +164,6 @@ if($enable_testing -eq 1)
 
     # 3. Export to a valid UTF-8 file
     $cleanJson | Out-File "state_Sandstorm.json" -Encoding utf8
-}
-
-function Start-NetworkMonitor {
-    <#
-    .SYNOPSIS
-        Launches a real-time network traffic monitor at the lower-right corner of the screen. 
-        Hardened against Windows 11 Timer/Pipeline async teardown crashes.
-    #>
-    if ($Global:NetMonitorRunspace -ne $null) {
-        Write-Warning "Network Monitor is already running."
-        return
-    }
-
-    Write-Host "Starting Network Monitor..." -ForegroundColor Green
-
-    $Global:NetSyncHash = [hashtable]::Synchronized(@{})
-    $Global:NetSyncHash.CloseWindow = $false
-    $Global:NetSyncHash.IsInitialized = $false
-
-    $Global:NetMonitorRunspace = [runspacefactory]::CreateRunspace()
-    $Global:NetMonitorRunspace.Open()
-
-    $Global:NetMonitorRunspace.SessionStateProxy.SetVariable('NetSyncHash', $Global:NetSyncHash)
-    $Global:NetMonitorRunspace.SessionStateProxy.SetVariable('CurrentRunspace', $Global:NetMonitorRunspace)
-
-    $PowerShellInstance = [powershell]::Create()
-    $PowerShellInstance.Runspace = $Global:NetMonitorRunspace
-
-    [void]$PowerShellInstance.AddScript({
-        try {
-            Add-Type -AssemblyName System.Windows.Forms
-            Add-Type -AssemblyName System.Drawing
-            Add-Type -AssemblyName System.Windows.Forms.DataVisualization
-
-            # 1. Main Window Config
-            $Form = New-Object System.Windows.Forms.Form
-            $Form.Text = "Live Network Traffic Monitor"
-            $Form.Size = New-Object System.Drawing.Size(450, 360)
-            $Form.FormBorderStyle = "FixedDialog"
-            $Form.StartPosition = "Manual"
-            $Form.ControlBox = $false 
-
-            $PrimaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $X_Position = [math]::Round(($PrimaryScreen.Width - $Form.Width) / 2)
-            $Form.Location = New-Object System.Drawing.Point($X_Position, 0)
-
-            # 2. Controls & Labels
-            $Header = New-Object System.Windows.Forms.Label
-            $Header.Text = "Real-Time Network Activity"
-            $Header.Font = New-Object System.Drawing.Font("Arial", 12, [System.Drawing.FontStyle]::Bold)
-            $Header.Location = New-Object System.Drawing.Point(20, 15)
-            $Header.Size = New-Object System.Drawing.Size(400, 25)
-            $Form.Controls.Add($Header)
-
-            $LblLive = New-Object System.Windows.Forms.Label
-            $LblLive.Text = "Current Throughput:"
-            $LblLive.Font = New-Object System.Drawing.Font("Arial", 9, [System.Drawing.FontStyle]::Bold)
-            $LblLive.Location = New-Object System.Drawing.Point(20, 45)
-            $LblLive.Size = New-Object System.Drawing.Size(130, 20)
-            $Form.Controls.Add($LblLive)
-
-            $LblLiveStats = New-Object System.Windows.Forms.Label
-            $LblLiveStats.Text = "DL: 0.00 Mbps  |  UL: 0.00 Mbps"
-            $LblLiveStats.Font = New-Object System.Drawing.Font("Consolas", 10)
-            $LblLiveStats.Location = New-Object System.Drawing.Point(150, 45)
-            $LblLiveStats.Size = New-Object System.Drawing.Size(270, 20)
-            $LblLiveStats.TextAlign = [System.Drawing.ContentAlignment]::TopRight
-            $Form.Controls.Add($LblLiveStats)
-
-            # 3. Chart Setup
-            $Chart = New-Object System.Windows.Forms.DataVisualization.Charting.Chart
-            $Chart.Location = New-Object System.Drawing.Point(15, 75)
-            $Chart.Size = New-Object System.Drawing.Size(400, 230)
-
-            $ChartArea = New-Object System.Windows.Forms.DataVisualization.Charting.ChartArea
-            $ChartArea.AxisX.MajorGrid.LineColor = [System.Drawing.Color]::LightGray
-            $ChartArea.AxisY.MajorGrid.LineColor = [System.Drawing.Color]::LightGray
-            $ChartArea.AxisX.LabelStyle.Enabled = $false 
-            $ChartArea.AxisY.Title = "Mbps"
-            $Chart.ChartAreas.Add($ChartArea)
-
-            $SeriesDL = New-Object System.Windows.Forms.DataVisualization.Charting.Series -ArgumentList "Download"
-            $SeriesDL.ChartType = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
-            $SeriesDL.BorderWidth = 2
-            $SeriesDL.Color = [System.Drawing.Color]::DodgerBlue
-            $Chart.Series.Add($SeriesDL)
-
-            $SeriesUL = New-Object System.Windows.Forms.DataVisualization.Charting.Series -ArgumentList "Upload"
-            $SeriesUL.ChartType = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
-            $SeriesUL.BorderWidth = 2
-            $SeriesUL.Color = [System.Drawing.Color]::OrangeRed
-            $Chart.Series.Add($SeriesUL)
-
-            $Legend = New-Object System.Windows.Forms.DataVisualization.Charting.Legend
-            $Legend.Docking = [System.Windows.Forms.DataVisualization.Charting.Docking]::Top
-            $Chart.Legends.Add($Legend)
-            $Form.Controls.Add($Chart)
-
-            # 4. Engine Data Metric Collection Loop
-            $MaxPoints = 30
-            $Global:OldSample = Get-CimInstance -ClassName Win32_PerfRawData_Tcpip_NetworkInterface
-            
-            $MonitorTimer = New-Object System.Windows.Forms.Timer
-            $MonitorTimer.Interval = 1000
-
-            # Define the Tick logic explicitly as a reusable variable script block
-            $TickScript = {
-                try {
-                    # IF CLOSING SWITCH IS VISIBLE: Cut the wire immediately
-                    if ($NetSyncHash.CloseWindow) {
-                        $MonitorTimer.Stop()
-                        # Unbind the tick event to prevent Windows 11 OnTick invocation errors
-                        $MonitorTimer.remove_Tick($TickScript)
-                        $Form.Close()
-                        return
-                    }
-
-                    $NewSample = Get-CimInstance -ClassName Win32_PerfRawData_Tcpip_NetworkInterface
-                    
-                    $OldRx = ($Global:OldSample | Measure-Object -Property BytesReceivedPersec -Sum).Sum
-                    $OldTx = ($Global:OldSample | Measure-Object -Property BytesSentPersec -Sum).Sum
-                    $NewRx = ($NewSample | Measure-Object -Property BytesReceivedPersec -Sum).Sum
-                    $NewTx = ($NewSample | Measure-Object -Property BytesSentPersec -Sum).Sum
-
-                    $BytesReceived = $NewRx - $OldRx
-                    $BytesSent = $NewTx - $OldTx
-                    
-                    $LiveDl = [math]::Round(($BytesReceived * 8) / 1MB, 2)
-                    $LiveUl = [math]::Round(($BytesSent * 8) / 1MB, 2)
-
-                    if ($LiveDl -lt 0) { $LiveDl = 0 }
-                    if ($LiveUl -lt 0) { $LiveUl = 0 }
-
-                    $LblLiveStats.Text = "DL: $($LiveDl.ToString('0.00')) Mbps  |  UL: $($LiveUl.ToString('0.00')) Mbps"
-                    
-                    [void]$SeriesDL.Points.AddY($LiveDl)
-                    [void]$SeriesUL.Points.AddY($LiveUl)
-
-                    if ($SeriesDL.Points.Count -gt $MaxPoints) { $SeriesDL.Points.RemoveAt(0) }
-                    if ($SeriesUL.Points.Count -gt $MaxPoints) { $SeriesUL.Points.RemoveAt(0) }
-                    
-                    $Chart.ResetAutoValues()
-                    $Global:OldSample = $NewSample
-                } 
-                catch [System.Management.Automation.PipelineStoppedException] {
-                    $MonitorTimer.Stop()
-                }
-                catch {}
-            }
-
-            # Attach script block logic to the timer hook
-            $MonitorTimer.add_Tick($TickScript)
-
-            $Form.Add_FormClosing({
-                $MonitorTimer.Stop()
-                $MonitorTimer.remove_Tick($TickScript)
-                $MonitorTimer.Dispose()
-            })
-
-            $Global:NetSyncHash.IsInitialized = $true
-
-            $MonitorTimer.Start()
-            $Form.ShowDialog() | Out-Null
-        } 
-        catch [System.Management.Automation.PipelineStoppedException] {}
-        finally {
-            if ($CurrentRunspace) {
-                $CurrentRunspace.CloseAsync()
-            }
-        }
-    })
-
-    $Global:NetMonitorAsyncResult = $PowerShellInstance.BeginInvoke()
-}
-
-function Stop-NetworkMonitor {
-    <#
-    .SYNOPSIS
-        Signals the running loop to drop event blocks and close smoothly.
-    #>
-    if ($Global:NetMonitorRunspace -eq $null) {
-        Write-Warning "Network Monitor is not currently active."
-        return
-    }
-
-    Write-Host "Stopping Network Monitor..." -ForegroundColor Yellow
-
-    $RetryCount = 0
-    while (($Global:NetSyncHash -eq $null -or !$Global:NetSyncHash.IsInitialized) -and $RetryCount -lt 150) {
-        Write-Host "`rCount $RetryCount" -NoNewline
-        Start-Sleep -Milliseconds 200
-        $RetryCount++
-    }
-
-    if ($Global:NetSyncHash -and $Global:NetSyncHash.IsInitialized) {
-        $Global:NetSyncHash.CloseWindow = $true
-    }
-
-    # Allow time for background thread to run remove_Tick() and close the form natively
-    Start-Sleep -Milliseconds 2000
-
-    $Global:NetMonitorRunspace = $null
-    $Global:NetSyncHash = $null
-    $Global:NetMonitorAsyncResult = $null
-    
-    Write-Host "`nMonitor stopped successfully." -ForegroundColor Green
 }
 
 function User-Confirm
@@ -1166,7 +960,7 @@ function Modio_mod_directory {
 }
 
 <#
-    filebrowser_GUI -directoryPath  -guiTitle  -filter  -allowNoEntry
+    Repair GlobalSettings.json
 #>
 
 
@@ -1605,12 +1399,6 @@ function Process-Subscriptions
 
            	if ($update)
    	        {
-                if(-not $isNetworkMonitor)
-                {
-                    Start-NetworkMonitor
-                    $isNetworkMonitor = $true
-                }
-
        	        Write-Host "  Downloading $subname - $directory_ID - $modFilename - $modFilesize MB" -ForegroundColor Yellow
    		        Write-Host ""
 
@@ -1933,11 +1721,6 @@ $elapsedTime = Measure-Command {
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
 
-    if($isNetworkMonitor)
-    {
-        Stop-NetworkMonitor
-        $isNetworkMonitor = $false
-    }
 }
 
 $ModListJsonPath = Join-Path -Path "$env:LOCALAPPDATA" -ChildPath "JoannaWick\Sandstorm\ModList.json"
