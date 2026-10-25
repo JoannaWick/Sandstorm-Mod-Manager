@@ -86,6 +86,10 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 Change Log
 ==========
 
+2.0.1 (2026-10-25)
+
+    1. [REMOVED]  Removed the Network Activity GUI as there were too many issues with Windows 11 systems.
+
 2.0.0 (2026-10-21)
 
     1. [ADDED] The Main menu is now an Interactive GUI where you just have to point and click on buttons to do everything.  The keyboard is no longer used.
