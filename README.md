@@ -1,7 +1,7 @@
 # SandstormModManager
 ## Created for Insurgency Sandstorm 1.21 by Joanna Wick
-### Version: 2.0.0
-### Date: 2026-10-21
+### Version: 2.1.0
+### Date: 2026-10-26
 
 You can Ctrl+Click or Cmd+Click to open video in a new tab
 
@@ -85,6 +85,10 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+2.1.0 (2026-10-26)
+
+    1. [ADDED] FORCED Download and Unsubscribe will now get the latest Mod.io Subscriptions to populate the Mod Selection GUI.  This way you have the most recent list of mods to work with.  If it indicates there are new mods found when populating the GUI you can download them by clicking on the Process Mod Subscriptions button on the main menu.
 
 2.0.1 (2026-10-25)
 
