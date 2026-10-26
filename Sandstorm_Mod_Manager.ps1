@@ -8,7 +8,7 @@ param(
     [string]$batchLaunch=0
 )
 
-$Version = "2.0.1" 
+$Version = "2.1.0" 
 
 <# 
     Resize and center window
@@ -387,41 +387,18 @@ function Mod-Reset
     Write-Host "==============================================" -ForegroundColor Cyan
     Write-Host ""
 
-    if (Test-Path $ModListJsonPath)
-    {
-	    Write-Host "Reading settings from ModList.json."
-        Write-Host ""
-	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
-    }
-    else
-    {
-        Write-Host "ModList.json is MISSING and cannot proceed." -ForegroundColor Red
-        pause
-        exit
-    }
+    $ModListData = get-subscribedList -isForced $true
 
     $ModList = [System.Collections.Generic.List[string]]::new()
 
     foreach ($item in $ModListData) {
-
-        # Get each dynamic top element name and value
-        foreach ($property in $item.PSObject.Properties) {
+        # .psobject.Properties safely reveals all top-level dynamic Mod IDs
+        foreach ($property in $item.psobject.Properties) {
             $topName = $property.Name
-            $topValue = $property.Value
+            $modname = $property.Value.name # Access the inner "name" key directly using dot-notation
 
-            # Check if the value is a nested object/custom object
-            if ($topValue -is [System.Management.Automation.PSCustomObject]) {
-            
-                # Extract nested names and values
-                foreach ($nestedProp in $topValue.PSObject.Properties) {
-                    if($($nestedProp.Name) -eq "name")
-                    {
-                        $modname = $($nestedProp.Value)
-                    }
-                }
-            }
-            # Standard property output
-            [void]$ModList.Add($modname+" | "+$topName) # [void] suppresses the default .Add() output
+            # Format and append directly into your array list
+            [void]$ModList.Add("$modname | $topName")
         }
     }
 
@@ -433,12 +410,17 @@ function Mod-Reset
     if ($null -eq $SelectedMods -or $SelectedMods.Count -eq 0) {
         Write-Host "No Mods were selected" -ForegroundColor Red
         $global:forced_updates=0
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "      FORCE Download and Update Canceled      " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
 
         return
     }
 
     # Output the selected items
     Write-Host "You selected the following items:" -ForegroundColor Green
+    Write-Host ""
     $tlen=$SelectedMods.count
     if( $tlen -gt 1)
     {
@@ -473,14 +455,214 @@ function Mod-Reset
         $ModListData | ConvertTo-Json | Set-Content $ModListJsonPath
         $global:forced_updates=1
 
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "      FORCE Download and Update Beginning     " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host ""
         return
     }
     else
     {
         Write-Host ""
         Write-Host "Forced Mod Update Canceled" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "      FORCE Download and Update Canceled      " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
     }
 
+}
+
+# Build Current Mod List
+
+function get-subscribedList
+{
+    param
+    (
+        [bool]$isForced = $true
+    )
+
+    if (Test-Path $ModListJsonPath)
+    {
+	    Write-Host "Compiling Mods from ModList.json and Mod.io Subscription List."
+        Write-Host ""
+	    $unsubListData=Get-Content $ModListJsonPath | ConvertFrom-Json
+    }
+
+    $settingsPath = Join-Path "$env:LOCALAPPDATA" "mod.io\globalsettings.json"
+
+    if (Test-Path $settingsPath) {
+        $StoragePath = Get-Content -Raw -Path $settingsPath | ConvertFrom-Json
+    }
+    else
+    {
+        Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
+        exit
+    }
+
+    $destination=$StoragePath.RootLocalStoragePath
+    $destination=$destination.Replace('/', '\')
+
+    if(-not(Test-Path "$destination"))
+    {
+       $null=mkdir "$destination" -ErrorAction SilentlyContinue
+    }
+
+    $destinationMods="$destination"+"254\mods\"
+
+    $dataOffset=0
+    $dataLimit=100
+    $workingHash = @{}
+    $workingHash.WorkArray = @()
+    $workingHashCounter=0
+
+    Do {
+        $queryParams = @{
+            "_limit" = $dataLimit
+            "_offset" = $dataOffset
+        }
+
+        $sublist_json=Invoke-WebRequest -UseBasicParsing -URI https://api.mod.io/v1/me/subscribed?game_id=254 -Body $queryParams -Method GET -Headers @{"Authorization"="Bearer ${token}";"Accept"="application/json"}
+        $sublist=ConvertFrom-Json $sublist_json.Content
+
+        $dataOffset   = $sublist.result_offset + $sublist.result_count
+        $totalResults = $sublist.result_total
+        $workingHash.WorkArray += $null
+        $workingHash.WorkArray[$workingHashCounter] = $sublist.psobject.Copy()
+        $workingHashCounter = $workingHashCounter + 1
+
+        Start-Sleep -Milliseconds 250
+
+    } Until (($dataOffset) -ge $totalResults)
+
+    $result_total = $workingHash.WorkArray[0].result_total
+
+    $dataOffset=0
+    $dataLimit=25
+    $count_of_files = 0
+    $unsubListData_delete_comparison=@{}
+
+    # Get how many pages of mods found
+    $PageCount=$workingHash.WorkArray.length
+    if ($PageCount -ne 1)
+    {
+        $plural="s"
+    }
+    else
+    {
+        $plural=""
+    }
+    [string]$Page_Count=$PageCount
+    Write-Host "Found $Page_Count Subscription Page$plural."
+    Write-Host ""
+
+    [string]$resulttotal=$result_total
+    if ($result_total -ne 1)
+    {
+        $plural="s"
+    }
+    else
+    {
+        $plural=""
+    }
+    Write-Host "Found $resulttotal Subscription$plural."
+    Write-Host ""
+    Write-Host "New Mods will not be downloaded."
+    Write-Host ""
+
+    if($isForced)
+    {
+        Write-Host "Select each Mod in the FORCED Download GUI if you want to download."
+    }
+    else
+    {
+        Write-Host "If you wish to keep them select 'Process Mod Subscriptions' on the main menu."
+    }
+    Write-Host ""
+
+    for ($p = 0; $p -lt $PageCount; $p++)
+    {
+
+        # Get current hashtable element count
+        $len=$workingHash.WorkArray[$p].result_count
+
+        for ($i = 0; $i -lt $len; $i++)
+        {
+	        $sub=$workingHash.WorkArray[$p].data[$i]
+	        $subname=$sub.name
+
+            # Variables and Data to be transfered from mod.io state.json to Sandstorm state.json
+
+            $count_of_files++
+
+        	[string]$modid=$sub.id
+	        [string]$moddate_added=$sub.modfile.date_added
+	        [string]$modname=$sub.name
+
+         	# Write data about this sub to unsubListData
+
+	        if ($unsubListData.${modid} -eq $null)
+	        {
+		        $unsubListData | Add-Member -Name $modid -Value @{} -MemberType NoteProperty
+    		    $unsubListData.${modid}.date_added=0
+                $unsubListData.${modid}.name = $modname
+                Write-Host "New Mod Subscription: $modname | $modid" -ForegroundColor Yellow
+            }
+
+            $directory_ID=$modid
+            $unsubListData_delete_comparison | Add-Member -Name $modid -Value @{} -MemberType NoteProperty
+        }
+        $dataOffset+=$dataLimit
+    }
+
+    # If any mods are missing from the mod.io subscribed list
+    # when compared to the stored ModList.json the missing files
+    # will be removed from the ModList.json and the directories 
+    # will be deleted from the computer.  Compare $unsubListData with
+    # $unsubListData_delete_comparison and remove directories of
+    # missing mods.
+
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host "        Checking for Unsubscribed Mods        " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    $deletedMods=0
+
+    foreach ($item in $unsubListData) {
+        # .psobject.Properties safely reveals all top-level dynamic Mod IDs
+        foreach ($property in $item.psobject.Properties) {
+            $modDeleteID = $property.Name
+            $modDeleteName = $property.Value.name # Access the inner "name" key directly using dot-notation
+
+            if ($unsubListData_delete_comparison.${modDeleteID} -eq $null)
+            {
+            	if(-not(Test-Path "$destinationMods$modDeleteID"))
+	            {
+                    Write-Host "Mod: $modDeleteID - $modDeleteName not found" -ForegroundColor Yellow
+                }
+                else
+                {
+                    Write-Host "Deleting Unsubscribed Mod: $modDeleteID - $modDeleteName" -ForegroundColor Red
+                    Remove-Item -Path "$destinationMods$modDeleteID" -Recurse -Force
+                }
+                $unsubListDataListData.PSObject.Properties.Remove($modDeleteID)
+                $deletedMods+=1
+ 	        }
+        }
+    }
+
+    if ($deletedMods -eq 0)
+    {
+        Write-Host "No Unsubscribed Mods found." -ForegroundColor Green
+    }
+
+    # Update ModList.json 
+    $unsubListData | ConvertTo-Json | Set-Content $ModListJsonPath
+
+    return $unsubListData
 }
 
 # Display GUI Selector of all subscribed mods and ask user to
@@ -498,47 +680,24 @@ function Mod-Unsub
     $apiUrl = "https://api.mod.io/v1"
     $destinationMods="$destination"+"254\mods\"
 
-    if (Test-Path $ModListJsonPath)
-    {
-	    Write-Host "Reading settings from ModList.json."
-        Write-Host ""
-	    $ModListData=Get-Content $ModListJsonPath | ConvertFrom-Json
-    }
-    else
-    {
-        Write-Host "ModList.json is MISSING and cannot proceed." -ForegroundColor Red
-        pause
-        exit
-    }
-
     # Set up the headers with Bearer Token authentication
     $headers = @{
         "Authorization" = "Bearer $token"
         "Content-Type"  = "application/x-www-form-urlencoded"
     }
 
+    $ModListData = get-subscribedList -isForced $false
+
     $ModList = [System.Collections.Generic.List[string]]::new()
 
     foreach ($item in $ModListData) {
-
-        # Get each dynamic top element name and value
-        foreach ($property in $item.PSObject.Properties) {
+        # .psobject.Properties safely reveals all top-level dynamic Mod IDs
+        foreach ($property in $item.psobject.Properties) {
             $topName = $property.Name
-            $topValue = $property.Value
+            $modname = $property.Value.name # Access the inner "name" key directly using dot-notation
 
-            # Check if the value is a nested object/custom object
-            if ($topValue -is [System.Management.Automation.PSCustomObject]) {
-            
-                # Extract nested names and values
-                foreach ($nestedProp in $topValue.PSObject.Properties) {
-                    if($($nestedProp.Name) -eq "name")
-                    {
-                        $modname = $($nestedProp.Value)
-                    }
-                }
-            }
-            # Standard property output
-            [void]$ModList.Add($modname+" | "+$topName) # [void] suppresses the default .Add() output
+            # Format and append directly into your array list
+            [void]$ModList.Add("$modname | $topName")
         }
     }
 
@@ -549,12 +708,18 @@ function Mod-Unsub
 
     if ($null -eq $SelectedMods -or $SelectedMods.Count -eq 0) {
         Write-Host "No Mods were selected" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "     Unsubscribe and Delete Mods Canceled     " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host ""
 
         return
     }
 
     # Output the selected items
     Write-Host "You selected the following items:" -ForegroundColor Green
+    Write-Host ""
     $tlen=$SelectedMods.count
     if( $tlen -gt 1)
     {
@@ -572,7 +737,12 @@ function Mod-Unsub
 
     if ($UserChoice -eq "No") {
         Write-Host "Mod Unsubscribe and Delete Canceled" -ForegroundColor Yellow
-    return
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "     Unsubscribe and Delete Mods Canceled     " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host ""
+        return
     }
     else
     {
@@ -629,6 +799,10 @@ function Mod-Unsub
                 # Delay for mod.io api limit
                 Start-Sleep -Milliseconds 250
             }
+            Write-Host ""
+            Write-Host "==============================================" -ForegroundColor Cyan
+            Write-Host " Selected Mods have been Unsubscribed/Deleted    " -ForegroundColor Yellow
+            Write-Host "==============================================" -ForegroundColor Cyan
         }
         else
         {
@@ -845,7 +1019,7 @@ function Modio_mod_directory {
             [void]$ListView.Items.Add($UpItem)
 
             Try {
-                # 1. Fetch Folders
+                # Fetch Folders
                 $Dirs = Get-ChildItem -LiteralPath $TargetDirectory -Directory -Force -ErrorAction SilentlyContinue
                 ForEach ($Dir in $Dirs) {
                     $IsHidden = $Dir.Attributes.HasFlag([System.IO.FileAttributes]::Hidden)
@@ -983,6 +1157,9 @@ function repair_globalsettings
     {
         Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
         Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host " Repair globalsettings.json Location Canceled " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
         return
     }
     Write-Host "Current Mod Storage: $globalSettingSource" -ForegroundColor Green
@@ -1003,7 +1180,10 @@ function repair_globalsettings
         Write-Host "Directory path to state.json: $Source_mods_Path" -ForegroundColor Yellow
         Write-Host ""
     } else {
-        Write-Host "Repair Canceled" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host " Repair globalsettings.json Location Canceled " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
         return
     }
 
@@ -1011,7 +1191,9 @@ function repair_globalsettings
 
     if ($UserChoice -eq 'No') {
         Write-Host ""
-        Write-Host "globalsetting.json Repair Canceled" -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host " Repair globalsettings.json Location Canceled " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
         return
     }
 
@@ -1041,6 +1223,10 @@ function repair_globalsettings
     & $UpdateUIData
     Write-Host ""
     Write-Host "State.json Repaired at location $script:FinalSelection" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Cyan
+    Write-Host " Repair globalsettings.json Location Complete " -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Cyan
 }
 
 function move_Sandstorm_mods
@@ -1062,6 +1248,9 @@ function move_Sandstorm_mods
     {
         Write-Host "$settingsPath is MISSING and cannot proceed." -ForegroundColor Red
         Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "         Move Sandstorm Mods Canceled         " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
         return
     }
 
@@ -1075,7 +1264,9 @@ function move_Sandstorm_mods
     if(-not $script:FinalSelection)
     {
         Write-Host ""
-        Write-Host "Mod Move Aborted" -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "         Move Sandstorm Mods Canceled         " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
         return
     }
 
@@ -1086,7 +1277,9 @@ function move_Sandstorm_mods
     if ($UserChoice -eq 'No')
     {
         Write-Host ""
-        Write-Host "Mod Move Aborted" -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "         Move Sandstorm Mods Canceled         " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
         return
     }
     else
@@ -1142,6 +1335,10 @@ function move_Sandstorm_mods
         & $UpdateUIData
         Write-Host ""
         Write-Host "Mods copied to location $script:FinalSelection" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "==============================================" -ForegroundColor Cyan
+        Write-Host "         Move Sandstorm Mods Complete         " -ForegroundColor Yellow
+        Write-Host "==============================================" -ForegroundColor Cyan
     }
 }
 
@@ -1402,17 +1599,6 @@ function Process-Subscriptions
        	        Write-Host "  Downloading $subname - $directory_ID - $modFilename - $modFilesize MB" -ForegroundColor Yellow
    		        Write-Host ""
 
-            # Track the precise download duration 
-<#            $elapsedTime = Measure-Command {
-#                $webClient = New-Object System.Net.WebClient
-#                $webClient.DownloadFile($modURL, "zip\$modFilename")
-
-                $ProgressPreference = 'SilentlyContinue'
-                Invoke-WebRequest -Uri $modURL -OutFile "zip\$modFilename" -TimeoutSec 30 -UseBasicParsing
-                $ProgressPreference = 'Continue'
-            }
-#>
-
 # Explicitly load the missing HTTP assembly into the current session
 Add-Type -AssemblyName System.Net.Http
 
@@ -1538,30 +1724,7 @@ $elapsedTime = Measure-Command {
                     $error_fatal_msg += "Failure: $subname - $directory_ID - $modFilename code $LASTEXITCODE."
                     $error_fatal++
                 }
-<#
-    switch ($ExitCode) {
-        0 { 
-            Write-Host "Success! Extraction completed with exit code 0." -ForegroundColor Green 
-        }
-        1 { 
-            Write-Host "Warning: Non-fatal error occurred (Exit Code 1)." -ForegroundColor Yellow 
-        }
-        2 { 
-            Write-Host "Fatal Error: Misuse, bad arguments, or unexpected crash (Exit Code 2)." -ForegroundColor Red 
-        }
-        7 { 
-            Write-Host "Error: Command line error / wrong syntax (Exit Code 7)." -ForegroundColor Red 
-        }
-        8 { 
-            Write-Host "Error: Not enough memory for operation (Exit Code 8)." -ForegroundColor Red 
-        }
-        255 { 
-            Write-Host "User Error: Process was stopped or interrupted by user (Exit Code 255)." -ForegroundColor Yellow 
-        }
-        Default { 
-            Write-Host "Extraction failed with unknown error code: $ExitCode" -ForegroundColor Red 
-        }
-#>
+
                 $dirSize = (Get-ChildItem "$destinationMods$directory_ID" -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
                 $totalMBdiskStorage += $dirSize
 
@@ -1672,24 +1835,11 @@ $elapsedTime = Measure-Command {
     $deletedMods=0
 
     foreach ($item in $ModListData) {
-
-        # Get each dynamic top element name and value
-        foreach ($property in $item.PSObject.Properties) {
+        # .psobject.Properties safely reveals all top-level dynamic Mod IDs
+        foreach ($property in $item.psobject.Properties) {
             $modDeleteID = $property.Name
-            $modDeleteValue = $property.Value
+            $modDeleteName = $property.Value.name # Access the inner "name" key directly using dot-notation
 
-            # Check if the value is a nested object/custom object
-            if ($modDeleteValue -is [System.Management.Automation.PSCustomObject]) {
-            
-                # Extract nested names and values
-                foreach ($nestedProp in $modDeleteValue.PSObject.Properties) {
-                    if($($nestedProp.Name) -eq "name")
-                    {
-                        $modDeleteName = $($nestedProp.Value)
-                    }
-                }
-            }
- 
             if ($ModListData_delete_comparison.${modDeleteID} -eq $null)
             {
             	if(-not(Test-Path "$destinationMods$modDeleteID"))
