@@ -105,12 +105,12 @@ Change Log
     3. [ADDED] Mod.io Sandstorm Mod Browser for viewing all Sandstorm Mods, images, videos and HTML rendered information.  Browser can Subscribe and Unsubscribe to any mod.  sandstorm_catalog.json stored in config directory.  It is the cache for all Sandstorm Mods on Mod.io to prevent a refresh every time the browser is opened.  There is a Refresh List button to get the latest list of mods from Mod.io. List is automatically refreshed after 24 hours.  All images are cached in the image_cache dirctory to prevent downloading each time you use the browser.  Images are only downloaded and cached when you display a new page or select a mod to view.
     4. [ADDED] Theme Toggle button to toggle between Dark and Light Themes. Setting saved to configuration.
     5. [REMOVED] Previous unsubscribe code removed.
-    5. [REMOVED] A mkdir when processing subscriptions that for some silly reason would delete all downloaded mod direcctories forcing the Mod Manager to re-download all mods.
-    6. [CHANGED] Unsubscribe and Delete Specific Mods button changed to Mod.io Browser (Subscribe and Unsubscribe Mods)
-    7. [CHANGED] $globalSettingSource to $global:SettingSource 
-    8. [FIXED] When Processing files and new or deleted ones are detected the Number of Subscriptions and Disk Storage Size will now update.
-    9. [FIXED] When moving a mod directory the $global:SettingSource would not get updated causing mods to be lost and redownloaded if your clicked on Processing Subscriptions  without exiting the Mod Manager first.
-    10. [FIXED] Following Collections, Subscribing or Unsubscribing to one or more mods will invoke the Processing Subscriptions function to download and install any newly subscribed mods from Collections and Subscribing as well as rebuilding the state.json when Unsubscribing.  Not rebuilding the state.json after unsubscribing on previous versions would cause the Manager to think you were still subscribed to those mods if exited and restarted the Mod Manager without running the game. 
+    6. [REMOVED] A mkdir when processing subscriptions that for some silly reason would delete all downloaded mod direcctories forcing the Mod Manager to re-download all mods.
+    7. [CHANGED] Unsubscribe and Delete Specific Mods button changed to Mod.io Browser (Subscribe and Unsubscribe Mods)
+    8. [CHANGED] $globalSettingSource to $global:SettingSource 
+    9. [FIXED] When Processing files and new or deleted ones are detected the Number of Subscriptions and Disk Storage Size will now update.
+    10. [FIXED] When moving a mod directory the $global:SettingSource would not get updated causing mods to be lost and redownloaded if your clicked on Processing Subscriptions  without exiting the Mod Manager first.
+    11. [FIXED] Following Collections, Subscribing or Unsubscribing to one or more mods will invoke the Processing Subscriptions function to download and install any newly subscribed mods from Collections and Subscribing as well as rebuilding the state.json when Unsubscribing.  Not rebuilding the state.json after unsubscribing on previous versions would cause the Manager to think you were still subscribed to those mods if exited and restarted the Mod Manager without running the game. 
 
 2.1.0 (2026-10-26)
 
