@@ -19,7 +19,7 @@ Watch the Sandstorm Mod Manager Collection Browser Video (Click Image to view)
 
 Watch the Sandstorm Mod Manager Mod.io Mod Browser Video (Click Image to view)
 
-[![Watch the Sandstorm Mod Manager Mod.io Mod Browser Video](https://img.youtube.com/vi/mG_fqpqiRBY/0.jpg)](https://www.youtube.com/watch?v=mG_fqpqiRBY)
+[![Watch the Sandstorm Mod Manager Mod.io Mod Browser Video](https://img.youtube.com/vi/ucPj8V-Fs2o/0.jpg)](https://www.youtube.com/watch?v=ucPj8V-Fs2o)
 
 Joanna Wick's Sandstorm Website (Click image to go to website)
 
