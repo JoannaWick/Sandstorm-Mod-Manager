@@ -7,7 +7,19 @@ You can Ctrl+Click or Cmd+Click to open video in a new tab
 
 Watch the Sandstorm Mod Manager Demonstration Video (Click Image to view)
 
-[![Watch the Sandstorm Player Boot Installation Video](https://img.youtube.com/vi/mG_fqpqiRBY/0.jpg)](https://www.youtube.com/watch?v=mG_fqpqiRBY)
+[![Watch the Sandstorm Mod Manager Demonstration Video](https://img.youtube.com/vi/mG_fqpqiRBY/0.jpg)](https://www.youtube.com/watch?v=mG_fqpqiRBY)
+
+Watch the Sandstorm Mod Manager Light/Dark Theme Video (Click Image to view)
+
+[![Watch the Sandstorm Mod Manager Light/Dark Theme Video](https://img.youtube.com/vi/FW3EpgFtQOk/0.jpg)](https://www.youtube.com/watch?v=FW3EpgFtQOk)
+
+Watch the Sandstorm Mod Manager Collection Browser Video (Click Image to view)
+
+[![Watch the Sandstorm Mod Manager Collection Browser Video](https://img.youtube.com/vi/sDBPCCh6RLg/0.jpg)](https://www.youtube.com/watch?v=sDBPCCh6RLg)
+
+Watch the Sandstorm Mod Manager Mod.io Mod Browser Video (Click Image to view)
+
+[![Watch the Sandstorm Mod Manager Mod.io Mod Browser Video](https://img.youtube.com/vi/mG_fqpqiRBY/0.jpg)](https://www.youtube.com/watch?v=mG_fqpqiRBY)
 
 Joanna Wick's Sandstorm Website (Click image to go to website)
 
@@ -85,6 +97,20 @@ and it looks like they were compressed and a bad CRC was created by whatever pro
 
 Change Log
 ==========
+
+3.0.0 (2026-11-??)
+
+    1. [ADDED] If first run or an update the Start_Sandstorm_Mod_Manager.bat will re-run itself in Admin mode to unblock all files.
+    2. [ADDED] You can choose between a Dark and Light Theme
+    3. [ADDED] Mod.io Sandstorm Mod Browser for viewing all Sandstorm Mods, images, videos and HTML rendered information.  Browser can Subscribe and Unsubscribe to any mod.  sandstorm_catalog.json stored in config directory.  It is the cache for all Sandstorm Mods on Mod.io to prevent a refresh every time the browser is opened.  There is a Refresh List button to get the latest list of mods from Mod.io. List is automatically refreshed after 24 hours.  All images are cached in the image_cache dirctory to prevent downloading each time you use the browser.  Images are only downloaded and cached when you display a new page or select a mod to view.
+    4. [ADDED] Theme Toggle button to toggle between Dark and Light Themes. Setting saved to configuration.
+    5. [REMOVED] Previous unsubscribe code removed.
+    5. [REMOVED] A mkdir when processing subscriptions that for some silly reason would delete all downloaded mod direcctories forcing the Mod Manager to re-download all mods.
+    6. [CHANGED] Unsubscribe and Delete Specific Mods button changed to Mod.io Browser (Subscribe and Unsubscribe Mods)
+    7. [CHANGED] $globalSettingSource to $global:SettingSource 
+    8. [FIXED] When Processing files and new or deleted ones are detected the Number of Subscriptions and Disk Storage Size will now update.
+    9. [FIXED] When moving a mod directory the $global:SettingSource would not get updated causing mods to be lost and redownloaded if your clicked on Processing Subscriptions  without exiting the Mod Manager first.
+    10. [FIXED] Following Collections, Subscribing or Unsubscribing to one or more mods will invoke the Processing Subscriptions function to download and install any newly subscribed mods from Collections and Subscribing as well as rebuilding the state.json when Unsubscribing.  Not rebuilding the state.json after unsubscribing on previous versions would cause the Manager to think you were still subscribed to those mods if exited and restarted the Mod Manager without running the game. 
 
 2.1.0 (2026-10-26)
 
