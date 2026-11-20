@@ -28,13 +28,11 @@ fltmc >nul 2>&1
 
 rem Checks if the previous command returned an error (1 or higher)
 if errorlevel 1 (
-    echo Must be in Administration Mode to UnBlock downloaded files.
-    echo This will allow Scripts to execute without User being asked for Permissions.
-    echo Administration mode will not be needed after this unless Script explicitly
-    echo asks for it.
-    pause
+    powershell -Command "Start-Process -FilePath '%0' -Verb RunAs"
     exit /b
 )
+
+cd /d "%~dp0"
 
 echo First run detected. Elevated Administrator rights confirmed.
 echo Unblocking files...
@@ -54,7 +52,6 @@ echo.
 echo Done! Configuration batchFirstRun.cfg updated.
 echo User will not see this again.
 echo.
-pause
 
 :LaunchGame
 
