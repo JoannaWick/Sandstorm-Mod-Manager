@@ -1,0 +1,221 @@
+﻿{
+    "2406055":  {
+                    "name":  "Compass Radar"
+                },
+    "3787030":  {
+                    "name":  "\"Pustosh\" V0.5"
+                },
+    "144612":  {
+                   "name":  "ALP - Basic Test"
+               },
+    "152124":  {
+                   "name":  "ALP - Paluja"
+               },
+    "1888218":  {
+                    "name":  "Alps"
+                },
+    "413929":  {
+                   "name":  "ALPPalujaTest"
+               },
+    "144182":  {
+                   "name":  "Ambush"
+               },
+    "1165213":  {
+                    "name":  "Azaw"
+                },
+    "3958079":  {
+                    "name":  "BattleDrill"
+                },
+    "107516":  {
+                   "name":  "Carentan"
+               },
+    "117116":  {
+                   "name":  "Cheyenne"
+               },
+    "725902":  {
+                   "name":  "City"
+               },
+    "2901040":  {
+                    "name":  "Conflict"
+                },
+    "1715641":  {
+                    "name":  "Crater"
+                },
+    "100518":  {
+                   "name":  "Cruise"
+               },
+    "661289":  {
+                   "name":  "CTK Test"
+               },
+    "169557":  {
+                   "name":  "CTK_Coast"
+               },
+    "1017032":  {
+                    "name":  "CTK_Suburb"
+                },
+    "2093141":  {
+                    "name":  "CTK_Suburb2"
+                },
+    "970118":  {
+                   "name":  "CTK_TheLastFrontier"
+               },
+    "1774629":  {
+                    "name":  "CyberPunkd"
+                },
+    "1736039":  {
+                    "name":  "Dancing Caverns"
+                },
+    "1628307":  {
+                    "name":  "Das_Boot"
+                },
+    "159559":  {
+                   "name":  "der_Bunker"
+               },
+    "561774":  {
+                   "name":  "Diplomacy"
+               },
+    "1818507":  {
+                    "name":  "DistrictR_New"
+                },
+    "983281":  {
+                   "name":  "Dome"
+               },
+    "519042":  {
+                   "name":  "Dust2"
+               },
+    "2065904":  {
+                    "name":  "Encounter"
+                },
+    "140914":  {
+                   "name":  "Glassdome"
+               },
+    "2201355":  {
+                    "name":  "Grey"
+                },
+    "1584362":  {
+                    "name":  "Interstellar"
+                },
+    "99441":  {
+                  "name":  "Irca Snow Map"
+              },
+    "155761":  {
+                   "name":  "Island_Outpost"
+               },
+    "176670":  {
+                   "name":  "MallConflict"
+               },
+    "176551":  {
+                   "name":  "Mist"
+               },
+    "448415":  {
+                   "name":  "Mud Village"
+               },
+    "580499":  {
+                   "name":  "Oasis"
+               },
+    "597039":  {
+                   "name":  "Payout"
+               },
+    "752895":  {
+                   "name":  "Polar"
+               },
+    "1472911":  {
+                    "name":  "Power Extraction"
+                },
+    "569602":  {
+                   "name":  "SnowWorld"
+               },
+    "455703":  {
+                   "name":  "Somodag"
+               },
+    "162079":  {
+                   "name":  "Stork_Castle_x"
+               },
+    "371483":  {
+                   "name":  "Sultan Of Drugs"
+               },
+    "651825":  {
+                   "name":  "Tarkov - Factory"
+               },
+    "760053":  {
+                   "name":  "The Green Zone"
+               },
+    "170787":  {
+                   "name":  "The_Tower"
+               },
+    "123669":  {
+                   "name":  "TheFarm"
+               },
+    "4850042":  {
+                    "name":  "Tunnelv1"
+                },
+    "3150306":  {
+                    "name":  "UrbanTerror"
+                },
+    "651273":  {
+                   "name":  "Valley"
+               },
+    "2681788":  {
+                    "name":  "Valley WIP (Whitebox Stage)"
+                },
+    "1033726":  {
+                    "name":  "Vanguard"
+                },
+    "1720562":  {
+                    "name":  "Wood"
+                },
+    "1959208":  {
+                    "name":  "InDaClub"
+                },
+    "1169460":  {
+                    "name":  "Bridges"
+                },
+    "773324":  {
+                   "name":  "Redwood Reborn"
+               },
+    "436873":  {
+                   "name":  "SaltMine"
+               },
+    "1005158":  {
+                    "name":  "Blueprint Test Grounds Map"
+                },
+    "2545886":  {
+                    "name":  "Bridge_Test"
+                },
+    "2409945":  {
+                    "name":  "ChuckTestMod"
+                },
+    "876966":  {
+                   "name":  "Desert Test Map"
+               },
+    "167054":  {
+                   "name":  "Destructible Map Test"
+               },
+    "4342540":  {
+                    "name":  "Destruction Test"
+                },
+    "637830":  {
+                   "name":  "DGL Test Theater"
+               },
+    "3623318":  {
+                    "name":  "Don\u0027t Subscribe  (Test Only-1)"
+                },
+    "3626522":  {
+                    "name":  "Don\u0027t Subscribe  (Test Only-2)"
+                },
+    "123355":  {
+                   "name":  "D-Tech Eotech Reticle mod test"
+               },
+    "2985821":  {
+                    "name":  "GreenTest"
+                },
+    "762899":  {
+                   "name":  "Insurgency Source Map Pack Testing"
+               },
+    "2574988":  {
+                    "name":  "Custom AI Map Tester"
+                },
+    "98049":  {
+                  "name":  "CQB TestingGrounds (T-Hunt)"
+              }
+}
